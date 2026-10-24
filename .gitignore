@@ -1,0 +1,17 @@
+# Foundry
+out/
+cache/
+broadcast/
+.env
+
+# Web
+web/node_modules/
+web/dist/
+web/.vercel/
+.vercel/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
