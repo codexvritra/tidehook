@@ -1,6 +1,6 @@
 # tidehook
 
-[![ci](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![ci](https://github.com/codexvritra/tidehook/actions/workflows/ci.yml/badge.svg)](https://github.com/codexvritra/tidehook/actions/workflows/ci.yml)
 
 **A token launchpad on Robinhood Chain where Uniswap v4 hooks price time instead of blocking trades.**
 

@@ -26,7 +26,7 @@ export const ETH: Address = "0x0000000000000000000000000000000000000000";
 
 export { ADDR };
 
-export const GITHUB_URL: string = import.meta.env.VITE_GITHUB_URL || "https://github.com";
+export const GITHUB_URL: string = import.meta.env.VITE_GITHUB_URL || "https://github.com/codexvritra/tidehook";
 
 export const explorer = (a: string) => `${robinhood.blockExplorers.default.url}/address/${a}`;
 export const explorerTx = (h: string) => `${robinhood.blockExplorers.default.url}/tx/${h}`;
