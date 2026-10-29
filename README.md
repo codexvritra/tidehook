@@ -4,6 +4,8 @@
 
 **A token launchpad on Robinhood Chain where Uniswap v4 hooks price time instead of blocking trades.**
 
+**Live app: https://tidehook-launchpad.vercel.app**
+
 Launch a token in one transaction. Its liquidity is locked forever, and its pool runs one of four hooks:
 
 | Hook | What it does | Fee |
