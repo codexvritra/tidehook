@@ -189,14 +189,14 @@ contract TidehookTest is Test, Deployers {
         (k, id) = initPoolAndAddLiquidity(currency0, currency1, IHooks(a), 3000, SQRT_PRICE_1_1);
 
         MockERC20(Currency.unwrap(currency0)).approve(a, type(uint256).max);
-        hook.bond(k, true, 1_000e18, -100, 30 days, 1 days);
+        hook.bond(k, true, 1_000e18, -100, 30 days, 1 days, address(this));
     }
 
     function test_bond_onlyLauncher() public {
         (CreatorBondHook hook, PoolKey memory k,) = _bonded();
         vm.prank(address(0xBEEF));
         vm.expectRevert(CreatorBondHook.NotLauncher.selector);
-        hook.bond(k, true, 1, -100, 1, 1);
+        hook.bond(k, true, 1, -100, 1, 1, address(0xBEEF));
     }
 
     function test_bond_vestsAndClaims() public {

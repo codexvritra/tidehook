@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { isAddress } from "viem";
-import { HOOKS, client, explorer } from "../lib/chain";
+import { ADDR, client, explorer } from "../lib/chain";
 import { decodeHookFlags } from "../lib/model";
 import { Kicker } from "./ui";
 
-const OURS = Object.entries(HOOKS).filter(([, a]) => a) as [string, string][];
+const OURS: [string, string][] = [
+  ["PatienceHook", ADDR.patience],
+  ["SpringHook", ADDR.spring],
+  ["CreatorBondHook", ADDR.bond],
+  ["SessionHook", ADDR.session],
+];
 
 export function Inspector() {
   const [addr, setAddr] = useState("");
@@ -30,7 +35,7 @@ export function Inspector() {
   return (
     <section id="inspector">
       <div className="wrap">
-        <Kicker n="05">Hook inspector</Kicker>
+        <Kicker n="Tool">Hook inspector</Kicker>
         <h2>
           Check any hook <em>before you trade.</em>
         </h2>

@@ -1,30 +1,32 @@
 import { createPublicClient, defineChain, http, type Address } from "viem";
+import { ADDR } from "./deployments";
+
+const RPC_URL: string = import.meta.env.VITE_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
+
+/** True when pointed at a local fork (development). */
+export const IS_LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)/.test(RPC_URL);
 
 export const robinhood = defineChain({
   id: 4663,
   name: "Robinhood Chain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
+  rpcUrls: { default: { http: [RPC_URL] } },
   blockExplorers: { default: { name: "Blockscout", url: "https://robinhoodchain.blockscout.com" } },
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
-export const client = createPublicClient({ chain: robinhood, transport: http(), batch: { multicall: true } });
+// Multicall batching on mainnet. A local anvil fork of a non-archive RPC can't lazily load Multicall3
+// once its fork block ages out, so local mode sends plain calls.
+export const client = createPublicClient({ chain: robinhood, transport: http(RPC_URL), batch: { multicall: !IS_LOCAL } });
 
 /** Uniswap v4 singleton on Robinhood Chain (verified on-chain: 24 KB code, owner(), protocolFeeController()). */
 export const POOL_MANAGER: Address = "0x8366a39CC670B4001A1121B8F6A443A643e40951";
+export const CREATE2_DEPLOYER: Address = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
+export const ETH: Address = "0x0000000000000000000000000000000000000000";
 
-const env = import.meta.env;
-const addr = (v: string | undefined) => (v && /^0x[0-9a-fA-F]{40}$/.test(v) ? (v as Address) : undefined);
+export { ADDR };
 
-/** Hook deployments. Set VITE_*_HOOK in Vercel once the deploy script has been broadcast. */
-export const HOOKS = {
-  patience: addr(env.VITE_PATIENCE_HOOK),
-  spring: addr(env.VITE_SPRING_HOOK),
-  bond: addr(env.VITE_BOND_HOOK),
-  session: addr(env.VITE_SESSION_HOOK),
-} as const;
-
-export const GITHUB_URL: string = env.VITE_GITHUB_URL || "https://github.com";
+export const GITHUB_URL: string = import.meta.env.VITE_GITHUB_URL || "https://github.com";
 
 export const explorer = (a: string) => `${robinhood.blockExplorers.default.url}/address/${a}`;
+export const explorerTx = (h: string) => `${robinhood.blockExplorers.default.url}/tx/${h}`;

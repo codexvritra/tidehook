@@ -10,6 +10,7 @@ optimizer = true
 optimizer_runs = 800
 via_ir = false
 ffi = false
+fs_permissions = [{ access = "read", path = "./deployments" }, { access = "read", path = "./web/src/deploy" }]
 
 [rpc_endpoints]
 robinhood = "${ROBINHOOD_RPC_URL}"

@@ -17,8 +17,10 @@ import {TideBaseHook} from "./base/TideBaseHook.sol";
 /// @notice A creator escrows their own allocation in the hook. It vests linearly, but:
 ///         - it can only be claimed once the token has *held* at or above the creator's floor for
 ///           `grace` seconds;
-///         - if the price stays below the floor for `grace`, anyone can slash the bond and every
-///           unclaimed token is burned, shrinking supply for holders.
+///         - the bond *arms* the first time the price reaches the floor; from then on, if the price
+///           falls back and stays below the floor for `grace`, anyone can slash the bond and every
+///           unclaimed token is burned, shrinking supply for holders. A floor set above the launch
+///           price therefore can't be slashed before the token ever got there.
 ///         The creator's payout is tied to the price they promised, enforced by the pool itself.
 /// @dev    Floor crossings are recorded in afterSwap. Price in a v4 pool only moves by swapping,
 ///         so a swap is always the event that enters or leaves the below-floor state.
@@ -42,6 +44,7 @@ contract CreatorBondHook is TideBaseHook {
     error FloorNotHeld(uint256 heldFor, uint256 required);
 
     event Bonded(PoolId indexed poolId, address indexed creator, uint256 amount, int24 floorTick);
+    event FloorArmed(PoolId indexed poolId, uint64 at);
     event FloorBreached(PoolId indexed poolId, uint64 at);
     event FloorRecovered(PoolId indexed poolId, uint64 at);
     event Claimed(PoolId indexed poolId, uint256 amount);
@@ -58,13 +61,14 @@ contract CreatorBondHook is TideBaseHook {
         uint64 vestDuration;
         uint64 grace; // how long a floor state must persist to count
         bool isBelow;
+        bool armed; // price has reached the floor at least once; only then can the bond be slashed
         uint64 belowSince; // start of the below-floor timer (survives short recoveries)
         uint64 aboveSince; // start of the current above-floor stint; 0 while below
         uint128 amount;
         uint128 claimed;
     }
 
-    mapping(PoolId => Bond) public bonds;
+    mapping(PoolId => Bond) internal bonds;
     /// @notice Address that initialized each pool; the only one allowed to bond against it.
     mapping(PoolId => address) public launcher;
 
@@ -88,7 +92,8 @@ contract CreatorBondHook is TideBaseHook {
         return this.beforeInitialize.selector;
     }
 
-    /// @notice Escrow `amount` of the creator token against `floorTick`.
+    /// @notice Escrow `amount` of the creator token against `floorTick`. Tokens are pulled from the
+    ///         caller (the pool's launcher); vested tokens are paid to `creator`, who alone may claim.
     /// @param floorTick Pool tick of the floor. When the creator token is currency1, a *higher*
     ///        tick means a *cheaper* creator token, and the floor is breached above this tick.
     function bond(
@@ -97,10 +102,11 @@ contract CreatorBondHook is TideBaseHook {
         uint128 amount,
         int24 floorTick,
         uint64 vestDuration,
-        uint64 grace
+        uint64 grace,
+        address creator
     ) external {
         require(address(key.hooks) == address(this), "hook");
-        require(amount > 0 && vestDuration > 0, "params");
+        require(amount > 0 && vestDuration > 0 && creator != address(0), "params");
         PoolId id = key.toId();
         if (msg.sender != launcher[id]) revert NotLauncher();
         if (bonds[id].creator != address(0)) revert BondExists();
@@ -112,7 +118,7 @@ contract CreatorBondHook is TideBaseHook {
         if (token.isAddressZero()) revert NativeNotSupported();
 
         Bond memory b = Bond({
-            creator: msg.sender,
+            creator: creator,
             creatorIsCurrency0: creatorIsCurrency0,
             slashed: false,
             floorTick: floorTick,
@@ -120,20 +126,26 @@ contract CreatorBondHook is TideBaseHook {
             vestDuration: vestDuration,
             grace: grace,
             isBelow: false,
+            armed: true,
             belowSince: 0,
             aboveSince: uint64(block.timestamp),
             amount: amount,
             claimed: 0
         });
         if (_isBelow(b, tick)) {
+            // Launched under the floor: nothing to slash until the price first gets there.
             b.isBelow = true;
-            b.belowSince = uint64(block.timestamp);
+            b.armed = false;
             b.aboveSince = 0;
         }
         bonds[id] = b;
 
         ERC20(Currency.unwrap(token)).safeTransferFrom(msg.sender, address(this), amount);
-        emit Bonded(id, msg.sender, amount, floorTick);
+        emit Bonded(id, creator, amount, floorTick);
+    }
+
+    function getBond(PoolId id) external view returns (Bond memory) {
+        return bonds[id];
     }
 
     function vested(PoolId id) public view returns (uint256) {
@@ -157,7 +169,8 @@ contract CreatorBondHook is TideBaseHook {
 
     function slashable(PoolId id) public view returns (bool) {
         Bond storage b = bonds[id];
-        return b.creator != address(0) && !b.slashed && b.isBelow && block.timestamp - b.belowSince >= b.grace;
+        return
+            b.creator != address(0) && !b.slashed && b.armed && b.isBelow && block.timestamp - b.belowSince >= b.grace;
     }
 
     function claim(PoolKey calldata key) external {
@@ -212,7 +225,12 @@ contract CreatorBondHook is TideBaseHook {
             } else if (!below && b.isBelow) {
                 b.isBelow = false;
                 b.aboveSince = uint64(block.timestamp);
-                emit FloorRecovered(id, uint64(block.timestamp));
+                if (!b.armed) {
+                    b.armed = true;
+                    emit FloorArmed(id, uint64(block.timestamp));
+                } else {
+                    emit FloorRecovered(id, uint64(block.timestamp));
+                }
             }
         }
         return (this.afterSwap.selector, 0);

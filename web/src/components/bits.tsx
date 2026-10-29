@@ -1,0 +1,37 @@
+import { useState } from "react";
+import { KINDS } from "../lib/data";
+import { priceParts } from "../lib/price";
+
+export function Avatar({ src, label, size = 44 }: { src?: string; label: string; size?: number }) {
+  const [broken, setBroken] = useState(false);
+  const safe = src && /^(https:\/\/|ipfs:\/\/)/.test(src) ? src.replace(/^ipfs:\/\//, "https://ipfs.io/ipfs/") : "";
+  if (!safe || broken) {
+    const hue = [...label].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+    return (
+      <span className="avatar" style={{ width: size, height: size, background: `linear-gradient(135deg, hsl(${hue} 70% 45%), hsl(${(hue + 60) % 360} 70% 35%))` }}>
+        {label.slice(0, 2).toUpperCase()}
+      </span>
+    );
+  }
+  return <img className="avatar" src={safe} alt="" width={size} height={size} onError={() => setBroken(true)} referrerPolicy="no-referrer" />;
+}
+
+export function KindBadge({ kind }: { kind: number }) {
+  return <span className={`pill kind-${kind}`}>{KINDS[kind] ?? "?"}</span>;
+}
+
+export function Spinner() {
+  return <span className="spinner" aria-hidden="true" />;
+}
+
+/** Price with subscript-zero notation for tiny values: 0.0<sub>7</sub>4150 */
+export function Price({ value }: { value: number }) {
+  const p = priceParts(value);
+  if ("plain" in p) return <>{p.plain}</>;
+  return (
+    <>
+      0.0<sub className="zeros">{p.zeros}</sub>
+      {p.digits}
+    </>
+  );
+}

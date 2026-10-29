@@ -18,6 +18,10 @@ import {PatienceHook} from "../src/PatienceHook.sol";
 import {SpringHook} from "../src/SpringHook.sol";
 import {CreatorBondHook} from "../src/CreatorBondHook.sol";
 import {SessionHook} from "../src/SessionHook.sol";
+import {TideStack} from "./Launch.t.sol";
+import {TideLauncher} from "../src/TideLauncher.sol";
+import {TideRouter} from "../src/TideRouter.sol";
+import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
 /// @notice Runs every hook against the live Uniswap v4 PoolManager on Robinhood Chain.
 ///         ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com forge test --match-contract Fork
@@ -87,5 +91,39 @@ contract ForkTest is Test, Deployers {
         deployCodeTo("SessionHook.sol:SessionHook", abi.encode(manager, address(this)), c);
         (k,) = initPoolAndAddLiquidity(currency0, currency1, IHooks(c), LPFeeLibrary.DYNAMIC_FEE_FLAG, SQRT_PRICE_1_1);
         _swapBothWays(k);
+    }
+}
+
+/// @notice The full launch -> trade -> collect lifecycle on the live Robinhood Chain PoolManager.
+contract ForkLaunchTest is TideStack {
+    IPoolManager constant PM = IPoolManager(0x8366a39CC670B4001A1121B8F6A443A643e40951);
+
+    function setUp() public {
+        string memory rpc = vm.envOr("ROBINHOOD_RPC_URL", string(""));
+        if (bytes(rpc).length == 0) vm.skip(true);
+        vm.createSelectFork(rpc);
+        _deployStack(PM);
+        vm.deal(address(this), 100 ether);
+    }
+
+    function test_fork_launchTradeCollect_everyHook() public {
+        for (uint8 k; k < 4; ++k) {
+            TideLauncher.Kind kind = TideLauncher.Kind(k);
+            (uint256 id, address token) = launcher.launch(_params(kind, address(0), ETH_START, 1_000));
+            PoolKey memory key = launcher.getLaunch(id).key;
+
+            (uint256 qIn, uint256 qOut) = router.quoteExactIn(TideRouter.Swap(key, true, 1 ether, 0, 0, ""));
+            uint256 out = _buy(key, 1 ether, "");
+            assertEq(qIn, 1 ether);
+            assertEq(out, qOut, "live quote == live execution");
+
+            vm.warp(block.timestamp + 60);
+            uint256 back = _sell(key, token, uint128(out / 2));
+            assertGt(back, 0);
+
+            (uint256 fee0, uint256 fee1) = launcher.collectFees(id);
+            assertGt(fee0 + fee1, 0, "locked liquidity earned fees");
+            assertEq(ERC20(token).balanceOf(address(launcher)), 0);
+        }
     }
 }

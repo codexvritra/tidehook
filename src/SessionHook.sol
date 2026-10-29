@@ -49,8 +49,13 @@ contract SessionHook is TideBaseHook {
     /// @notice UTC day index (timestamp / 1 days) => exchange closed all day.
     mapping(uint256 => bool) public holidays;
 
+    /// @notice Hard ceiling on any session fee, so the schedule admin can never set punitive fees.
+    uint24 public constant MAX_SESSION_FEE = 50_000; // 5%
+
+    /// @param _owner Schedule admin. Zero means the deploying EOA, which keeps the CREATE2 init code (and so
+    ///        the hook address) independent of who deploys it.
     constructor(IPoolManager _poolManager, address _owner) TideBaseHook(_poolManager) {
-        owner = _owner;
+        owner = _owner == address(0) ? tx.origin : _owner;
         // NYSE in EDT (UTC-4): pre 08:00, open 13:30, close 20:00, post 24:00 UTC.
         _setSchedule(Schedule({preOpen: 8 hours, open: 13 hours + 30 minutes, close: 20 hours, postClose: 24 hours}));
         _setFees(500, 3000, 10000, 20000);
@@ -135,7 +140,7 @@ contract SessionHook is TideBaseHook {
     }
 
     function _setFees(uint24 regular, uint24 extended, uint24 closed, uint24 weekend) internal {
-        require(weekend <= LPFeeLibrary.MAX_LP_FEE && closed <= LPFeeLibrary.MAX_LP_FEE, "fee");
+        require(weekend <= MAX_SESSION_FEE, "fee");
         require(regular <= extended && extended <= closed && closed <= weekend, "order");
         fees = [regular, extended, closed, weekend];
         emit FeesSet(regular, extended, closed, weekend);

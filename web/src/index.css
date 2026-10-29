@@ -180,8 +180,8 @@ h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 .panel-head .tag { font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .subpanel { border-top: 1px dashed var(--line-2); margin-top: 22px; padding-top: 20px; }
 
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0 4px; }
-@media (max-width: 520px) { .stats { grid-template-columns: 1fr 1fr; } }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0 4px; }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .stat { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
 .stat label { display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
 .stat b { font: 500 20px/1.2 var(--mono); }

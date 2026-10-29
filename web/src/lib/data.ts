@@ -1,0 +1,190 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { erc20Abi, parseAbiItem, type Address, type Hex } from "viem";
+import { tideLauncherAbi } from "./abis";
+import { ADDR, ETH, POOL_MANAGER, client } from "./chain";
+
+export type PoolKey = { currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address };
+
+export type Launch = {
+  id: number;
+  token: Address;
+  creator: Address;
+  kind: number;
+  tokenIsCurrency0: boolean;
+  tickLower: number;
+  tickUpper: number;
+  createdAt: number;
+  createdBlock: bigint;
+  key: PoolKey;
+  name: string;
+  symbol: string;
+  imageURI: string;
+  description: string;
+  sqrtPriceX96: bigint;
+  tick: number;
+  quote: Address;
+};
+
+export const KINDS = ["Patience", "Spring", "Bond", "Session"] as const;
+export const KIND_BLURB = [
+  "Commit, wait, then swap: the fee drops from 1% to 0.05%. Instant buyers pay the most.",
+  "The fee rises as the price is pushed away from its time-weighted average. Swaps back toward it get the lowest fee.",
+  "Creator tokens stay locked until the price has held above a floor. If it falls below, anyone can burn them.",
+  "The fee follows the stock market: cheapest while the exchange is open, highest at weekends.",
+];
+
+/** Re-runs `fn` every `ms` while the tab is visible. Returns [data, error, reload]. */
+export function usePoll<T>(fn: () => Promise<T>, ms: number, deps: unknown[]): [T | undefined, unknown, () => void] {
+  const [data, setData] = useState<T>();
+  const [err, setErr] = useState<unknown>();
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  const run = useCallback(() => {
+    fnRef
+      .current()
+      .then((d) => {
+        setData(d);
+        setErr(undefined);
+      })
+      .catch(setErr);
+  }, []);
+  useEffect(() => {
+    setData(undefined);
+    run();
+    const id = setInterval(() => document.visibilityState === "visible" && run(), ms);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return [data, err, run];
+}
+
+// ------------------------------------------------------------------ deployment status
+
+export type DeployState = { ready: boolean; missing: string[] };
+
+export async function readDeployment(): Promise<DeployState> {
+  const names = Object.keys(ADDR) as (keyof typeof ADDR)[];
+  const codes = await Promise.all(names.map((n) => client.getCode({ address: ADDR[n] })));
+  const missing = names.filter((_, i) => !codes[i] || codes[i] === "0x");
+  return { ready: missing.length === 0, missing };
+}
+
+// ------------------------------------------------------------------ launches
+
+type RawLaunch = {
+  token: Address;
+  creator: Address;
+  kind: number;
+  tokenIsCurrency0: boolean;
+  tickLower: number;
+  tickUpper: number;
+  createdAt: bigint;
+  createdBlock: bigint;
+  key: PoolKey;
+  name: string;
+  symbol: string;
+  imageURI: string;
+  description: string;
+};
+
+function toLaunch(id: number, l: RawLaunch, sqrtPriceX96: bigint, tick: number): Launch {
+  return {
+    ...l,
+    id,
+    kind: Number(l.kind),
+    createdAt: Number(l.createdAt),
+    tickLower: Number(l.tickLower),
+    tickUpper: Number(l.tickUpper),
+    key: { ...l.key, fee: Number(l.key.fee), tickSpacing: Number(l.key.tickSpacing) },
+    sqrtPriceX96,
+    tick: Number(tick),
+    quote: l.tokenIsCurrency0 ? l.key.currency1 : l.key.currency0,
+  };
+}
+
+export async function readLaunches(limit = 120): Promise<Launch[]> {
+  const count = Number(await client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "launchCount" }));
+  if (count === 0) return [];
+  const [page, prices, ticks] = (await client.readContract({
+    address: ADDR.launcher,
+    abi: tideLauncherAbi,
+    functionName: "getLaunches",
+    args: [0n, BigInt(limit)],
+  })) as unknown as [RawLaunch[], bigint[], number[]];
+  return page.map((l, i) => toLaunch(count - 1 - i, l, prices[i], ticks[i]));
+}
+
+export async function readLaunch(id: number): Promise<Launch> {
+  const count = Number(await client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "launchCount" }));
+  if (id < 0 || id >= count) throw new Error("No such launch");
+  const [page, prices, ticks] = (await client.readContract({
+    address: ADDR.launcher,
+    abi: tideLauncherAbi,
+    functionName: "getLaunches",
+    args: [BigInt(count - 1 - id), 1n],
+  })) as unknown as [RawLaunch[], bigint[], number[]];
+  return toLaunch(id, page[0], prices[0], ticks[0]);
+}
+
+// ------------------------------------------------------------------ assets
+
+export type Asset = { address: Address; symbol: string; decimals: number };
+const assetCache = new Map<string, Promise<Asset>>();
+
+export function readAsset(address: Address): Promise<Asset> {
+  if (address.toLowerCase() === ETH) return Promise.resolve({ address: ETH, symbol: "ETH", decimals: 18 });
+  const k = address.toLowerCase();
+  if (!assetCache.has(k)) {
+    assetCache.set(
+      k,
+      Promise.all([
+        client.readContract({ address, abi: erc20Abi, functionName: "symbol" }),
+        client.readContract({ address, abi: erc20Abi, functionName: "decimals" }),
+      ]).then(([symbol, decimals]) => ({ address, symbol, decimals: Number(decimals) })),
+    );
+  }
+  return assetCache.get(k)!;
+}
+
+export function balanceOf(asset: Address, owner: Address): Promise<bigint> {
+  if (asset.toLowerCase() === ETH) return client.getBalance({ address: owner });
+  return client.readContract({ address: asset, abi: erc20Abi, functionName: "balanceOf", args: [owner] });
+}
+
+// ------------------------------------------------------------------ trades
+
+const SWAP_EVENT = parseAbiItem(
+  "event Swap(bytes32 indexed id, address indexed sender, int128 amount0, int128 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint24 fee)",
+);
+
+export type Trade = {
+  tx: Hex;
+  block: bigint;
+  buy: boolean;
+  tokenAmount: bigint;
+  quoteAmount: bigint;
+  sqrtPriceX96: bigint;
+  fee: number;
+};
+
+/** Every swap in a pool since launch, straight from PoolManager events (no indexer). */
+export async function readTrades(poolId: Hex, fromBlock: bigint, tokenIsCurrency0: boolean): Promise<Trade[]> {
+  const logs = await client.getLogs({ address: POOL_MANAGER, event: SWAP_EVENT, args: { id: poolId }, fromBlock, toBlock: "latest" });
+  return logs.map((l) => {
+    const a0 = l.args.amount0!;
+    const a1 = l.args.amount1!;
+    // Swapper-side deltas (as emitted by PoolManager): negative = paid in, positive = received.
+    const tokenDelta = tokenIsCurrency0 ? a0 : a1;
+    const quoteDelta = tokenIsCurrency0 ? a1 : a0;
+    const abs = (x: bigint) => (x < 0n ? -x : x);
+    return {
+      tx: l.transactionHash!,
+      block: l.blockNumber!,
+      buy: tokenDelta > 0n, // the swapper received the token
+      tokenAmount: abs(tokenDelta),
+      quoteAmount: abs(quoteDelta),
+      sqrtPriceX96: l.args.sqrtPriceX96!,
+      fee: Number(l.args.fee),
+    };
+  });
+}
