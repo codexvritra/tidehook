@@ -5,7 +5,7 @@ import { Explore } from "./pages/Explore";
 import { LaunchPage } from "./pages/Launch";
 import { TokenPage } from "./pages/Token";
 import { AppCtx, useRoute, type AppState } from "./lib/appContext";
-import { GITHUB_URL, IS_LOCAL } from "./lib/chain";
+import { ADDR, GITHUB_URL, IS_LOCAL } from "./lib/chain";
 import { readDeployment, usePoll } from "./lib/data";
 import { short } from "./lib/format";
 import { connect, useWallets, type Session } from "./lib/wallet";
@@ -131,7 +131,7 @@ export default function App() {
       {IS_LOCAL && <div className="banner moon">Local fork mode: reading a local anvil fork of Robinhood Chain, not mainnet.</div>}
       {deploy && !deploy.ready && route.page !== "deploy" && (
         <div className="banner">
-          The tidehook contracts aren't deployed on Robinhood Chain yet ({deploy.missing.length} of 6 missing).{" "}
+          The tidehook contracts aren't deployed on Robinhood Chain yet ({deploy.missing.length} of {Object.keys(ADDR).length} missing).{" "}
           <a href="#/deploy">Deploy them from your wallet →</a>
         </div>
       )}

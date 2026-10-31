@@ -76,6 +76,7 @@ export function Explore() {
             <ul>
               <li>No market-cap cap · no graduation · nothing gets stuck</li>
               <li>Liquidity locked at launch, earning fees for the creator</li>
+              <li>Creators earn 1% of every buy, paid in ETH</li>
               <li>Rename the coin any time (24h cooldown, public history)</li>
               <li>Upgrade the hook or change the pair: timelocked v4 migration</li>
             </ul>
@@ -178,6 +179,7 @@ export function Explore() {
                     <th>Price</th>
                     <th>Pay token</th>
                     <th>MCap</th>
+                    <th>Tax</th>
                     <th>Hook</th>
                     <th>Hook fee</th>
                     <th>Created</th>
@@ -209,6 +211,11 @@ export function Explore() {
                       </td>
                       <td>
                         {fmtNum(mcap)} <span className="dim">{a?.symbol}</span>
+                      </td>
+                      <td>
+                        <span className="tax" title="Buy 2% (1% creator + 1% platform) / sell 2% (platform), paid in ETH">
+                          2%/2%
+                        </span>
                       </td>
                       <td>
                         <KindBadge kind={l.kind} />

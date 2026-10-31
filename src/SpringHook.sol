@@ -10,7 +10,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {TideBaseHook} from "./base/TideBaseHook.sol";
+import {TideFeeHook} from "./base/TideFeeHook.sol";
 
 /// @title SpringHook — fees as a restoring force
 /// @notice The pool remembers where its price "rests" (a time-weighted EMA of the tick). Inside a
@@ -23,7 +23,7 @@ import {TideBaseHook} from "./base/TideBaseHook.sol";
 ///         restore the price get the cheapest fills in the pool. No trade is ever blocked.
 /// @dev    The rest point is an EMA of the pre-swap tick weighted by elapsed time, so many swaps
 ///         within one block cannot drag it: intra-block manipulation moves price, never the anchor.
-contract SpringHook is TideBaseHook {
+contract SpringHook is TideFeeHook {
     using PoolIdLibrary for PoolKey;
     using LPFeeLibrary for uint24;
     using StateLibrary for IPoolManager;
@@ -57,7 +57,7 @@ contract SpringHook is TideBaseHook {
         uint24 _band,
         uint24 _stiffness,
         uint32 _window
-    ) TideBaseHook(_poolManager) {
+    ) TideFeeHook(_poolManager) {
         require(_minFee <= _baseFee && _baseFee <= _maxFee && _maxFee <= LPFeeLibrary.MAX_LP_FEE, "fees");
         require(_window > 0, "window");
         baseFee = _baseFee;
@@ -72,6 +72,9 @@ contract SpringHook is TideBaseHook {
         p.beforeInitialize = true;
         p.afterInitialize = true;
         p.beforeSwap = true;
+        p.afterSwap = true;
+        p.beforeSwapReturnDelta = true;
+        p.afterSwapReturnDelta = true;
     }
 
     /// @notice sqrtPriceLimitX96 a restoring swap must use to qualify for `minFee`.
@@ -98,14 +101,14 @@ contract SpringHook is TideBaseHook {
         return fee > maxFee ? maxFee : uint24(fee);
     }
 
-    function beforeInitialize(address, PoolKey calldata key, uint160)
+    function beforeInitialize(address sender, PoolKey calldata key, uint160)
         external
-        view
         override
         onlyPoolManager
         returns (bytes4)
     {
         if (!key.fee.isDynamicFee()) revert MustUseDynamicFee();
+        _recordInitializer(sender, key);
         return this.beforeInitialize.selector;
     }
 
@@ -129,7 +132,7 @@ contract SpringHook is TideBaseHook {
         (, int24 tick,,) = poolManager.getSlot0(id);
         _relax(id, tick);
         uint24 fee = quoteFee(id, tick, params.zeroForOne, params.sqrtPriceLimitX96);
-        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, fee | LPFeeLibrary.OVERRIDE_FEE_FLAG);
+        return (this.beforeSwap.selector, _feeBefore(key, params), fee | LPFeeLibrary.OVERRIDE_FEE_FLAG);
     }
 
     /// @dev Moves the rest point toward `tick`, the price that has stood since the last update,

@@ -8,10 +8,11 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
-import {TideBaseHook} from "./base/TideBaseHook.sol";
+import {TideFeeHook} from "./base/TideFeeHook.sol";
 
 /// @title CreatorBondHook — the creator's bag is collateral for the floor
 /// @notice A creator escrows their own allocation in the hook. It vests linearly, but:
@@ -27,7 +28,7 @@ import {TideBaseHook} from "./base/TideBaseHook.sol";
 ///         Both directions require the new state to *persist*: a flash pump (buy, claim, dump in
 ///         one tx) cannot claim, and an above-floor stint shorter than `grace` does not reset the
 ///         slash timer, so buy-then-sell round trips cannot postpone a slash.
-contract CreatorBondHook is TideBaseHook {
+contract CreatorBondHook is TideFeeHook {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
     using SafeTransferLib for ERC20;
@@ -69,14 +70,15 @@ contract CreatorBondHook is TideBaseHook {
     }
 
     mapping(PoolId => Bond) internal bonds;
-    /// @notice Address that initialized each pool; the only one allowed to bond against it.
-    mapping(PoolId => address) public launcher;
 
-    constructor(IPoolManager _poolManager) TideBaseHook(_poolManager) {}
+    constructor(IPoolManager _poolManager) TideFeeHook(_poolManager) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory p) {
         p.beforeInitialize = true;
+        p.beforeSwap = true;
         p.afterSwap = true;
+        p.beforeSwapReturnDelta = true;
+        p.afterSwapReturnDelta = true;
     }
 
     /// @dev Remembers who called PoolManager.initialize, so nobody can front-run the real creator
@@ -88,7 +90,7 @@ contract CreatorBondHook is TideBaseHook {
         onlyPoolManager
         returns (bytes4)
     {
-        launcher[key.toId()] = sender;
+        _recordInitializer(sender, key);
         return this.beforeInitialize.selector;
     }
 
@@ -108,7 +110,7 @@ contract CreatorBondHook is TideBaseHook {
         require(address(key.hooks) == address(this), "hook");
         require(amount > 0 && vestDuration > 0 && creator != address(0), "params");
         PoolId id = key.toId();
-        if (msg.sender != launcher[id]) revert NotLauncher();
+        if (msg.sender != initializerOf[id]) revert NotLauncher();
         if (bonds[id].creator != address(0)) revert BondExists();
 
         (uint160 sqrtPriceX96, int24 tick,,) = poolManager.getSlot0(id);
@@ -203,7 +205,17 @@ contract CreatorBondHook is TideBaseHook {
         emit BondSlashed(id, msg.sender, burned);
     }
 
-    function afterSwap(address, PoolKey calldata key, SwapParams calldata, BalanceDelta, bytes calldata)
+    /// @dev Bond pools use a static LP fee; beforeSwap only charges launchpad fees.
+    function beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
+        external
+        override
+        onlyPoolManager
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        return (this.beforeSwap.selector, _feeBefore(key, params), 0);
+    }
+
+    function afterSwap(address, PoolKey calldata key, SwapParams calldata params, BalanceDelta delta, bytes calldata)
         external
         override
         onlyPoolManager
@@ -233,7 +245,7 @@ contract CreatorBondHook is TideBaseHook {
                 }
             }
         }
-        return (this.afterSwap.selector, 0);
+        return (this.afterSwap.selector, _feeAfter(key, params, delta));
     }
 
     function _isBelow(Bond memory b, int24 tick) internal pure returns (bool) {

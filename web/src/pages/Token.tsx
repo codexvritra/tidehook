@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits } from "viem";
-import { tideLauncherAbi } from "../lib/abis";
 import { useApp } from "../lib/appContext";
-import { ADDR, client, explorer, explorerTx } from "../lib/chain";
+import { explorer, explorerTx } from "../lib/chain";
 import { KINDS, KIND_BLURB, balanceOf, readAsset, readLaunch, readPending, readRenames, readTrades, usePoll, type Asset } from "../lib/data";
 import { short } from "../lib/format";
 import { poolIdOf } from "../lib/pool";
 import { fmtNum, marketCap, priceAtTick, tokenPrice } from "../lib/price";
-import { errMsg, sendTx } from "../lib/tx";
 import { Avatar, KindBadge, Price, Spinner } from "../components/bits";
 import { PriceChart } from "../components/Chart";
 import { BondPanel, PatiencePanel, SessionPanel, SpringPanel } from "../components/HookPanels";
 import { Swap } from "../components/Swap";
 import { ManagePanel, PendingBanner } from "../components/Manage";
+import { EarningsPanel } from "../components/Earnings";
 import { Copy } from "../components/ui";
 
 export function TokenPage({ id }: { id: number }) {
-  const { session, toast, deploy } = useApp();
+  const { session, deploy } = useApp();
   const [launch, err, reload] = usePoll(() => readLaunch(id), 8_000, [id, deploy?.ready]);
   const [asset, setAsset] = useState<Asset>();
   useEffect(() => {
@@ -32,16 +31,6 @@ export function TokenPage({ id }: { id: number }) {
   const [myBal, , reloadBal] = usePoll(() => (session && launch ? balanceOf(launch.token, session.account) : Promise.resolve(0n)), 12_000, [session?.account, launch?.token]);
 
   const isCreator = !!session && !!launch && session.account.toLowerCase() === launch.creator.toLowerCase();
-  const [fees, , reloadFees] = usePoll(
-    async () => {
-      if (!isCreator || !session) return null;
-      const { result } = await client.simulateContract({ account: session.account, address: ADDR.launcher, abi: tideLauncherAbi, functionName: "collectFees", args: [BigInt(id)] });
-      return result;
-    },
-    20_000,
-    [isCreator, id],
-  );
-  const [collecting, setCollecting] = useState(false);
   const [tab, setTab] = useState<"trades" | "hook">("trades");
   const [pending, , reloadPending] = usePoll(() => readPending(id), 20_000, [id, deploy?.ready]);
   const [renames] = usePoll(() => (launch ? readRenames(id, launch.createdBlock) : Promise.resolve([])), 60_000, [id, launch?.renamedAt]);
@@ -84,23 +73,8 @@ export function TokenPage({ id }: { id: number }) {
     reload();
     reloadTrades();
     reloadBal();
-    reloadFees();
     reloadPending();
   };
-
-  async function collect() {
-    if (!session) return;
-    setCollecting(true);
-    try {
-      await sendTx(session, { address: ADDR.launcher, abi: tideLauncherAbi, functionName: "collectFees", args: [BigInt(id)] });
-      toast("Fees collected to your wallet.");
-      reloadFees();
-    } catch (e) {
-      toast(errMsg(e), "err");
-    } finally {
-      setCollecting(false);
-    }
-  }
 
   const panelProps = { launch: l, asset, poolId, onChanged: refresh };
   const HookPanel = [PatiencePanel, SpringPanel, BondPanel, SessionPanel][l.kind];
@@ -257,27 +231,10 @@ export function TokenPage({ id }: { id: number }) {
         <aside className="tside">
           <Swap launch={l} asset={asset} poolId={poolId} onTraded={refresh} />
 
+          {isCreator && <EarningsPanel asset={asset} mode="creator" />}
+
           {isCreator && <ManagePanel launch={l} pending={pending ?? null} onChanged={refresh} />}
 
-          {isCreator && (
-            <div className="panel">
-              <div className="panel-head">
-                <span className="tag">Creator fees</span>
-              </div>
-              <p className="muted" style={{ marginTop: 0, fontSize: 12 }}>
-                Your launch liquidity is locked forever and earns every swap fee. Collect any time.
-              </p>
-              <dl className="kv">
-                <dt>{l.tokenIsCurrency0 ? l.symbol : asset.symbol}</dt>
-                <dd>{fees ? fmtNum(Number(formatUnits(fees[0], l.tokenIsCurrency0 ? 18 : quoteDec))) : "…"}</dd>
-                <dt>{l.tokenIsCurrency0 ? asset.symbol : l.symbol}</dt>
-                <dd>{fees ? fmtNum(Number(formatUnits(fees[1], l.tokenIsCurrency0 ? quoteDec : 18))) : "…"}</dd>
-              </dl>
-              <button className="btn primary block" disabled={collecting || !fees || fees[0] + fees[1] === 0n} onClick={collect}>
-                {collecting ? <Spinner /> : "Collect fees"}
-              </button>
-            </div>
-          )}
 
           {l.description && (
             <div className="panel">

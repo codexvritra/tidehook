@@ -100,6 +100,7 @@ contract TideMigrator is TideLauncherBase {
         (uint160 existing,,,) = poolManager.getSlot0(mv.key.toId());
         if (existing != 0) revert PoolExists();
         poolManager.initialize(mv.key, TickMath.getSqrtPriceAtTick(mv.tick));
+        _registerFees(mv.key, l.creator, mv.tokenIs0);
         _reseed(l, id, mv);
     }
 
@@ -107,36 +108,41 @@ contract TideMigrator is TideLauncherBase {
         internal
         returns (uint256 tokenAmt, uint256 quoteAmt)
     {
-        (int256 p0, int256 p1) = _remove(l, key, l.tickLower, l.tickUpper, _saltA(id));
+        (int256 p0, int256 p1) = _remove(l, id, key, l.tickLower, l.tickUpper, _saltA(id));
         if (l.bidLower != l.bidUpper) {
-            (int256 q0, int256 q1) = _remove(l, key, l.bidLower, l.bidUpper, _saltB(id));
+            (int256 q0, int256 q1) = _remove(l, id, key, l.bidLower, l.bidUpper, _saltB(id));
             p0 += q0;
             p1 += q1;
         }
         (tokenAmt, quoteAmt) = l.tokenIsCurrency0 ? (uint256(p0), uint256(p1)) : (uint256(p1), uint256(p0));
     }
 
-    /// @dev Removes a whole position. Returns principal only; accrued fees are paid to the creator.
-    function _remove(Launch storage l, PoolKey memory key, int24 lower, int24 upper, bytes32 salt)
+    /// @dev Removes a whole position. Returns principal only; accrued LP fees are routed (quote to the platform,
+    ///      token burned) on the way out.
+    function _remove(Launch storage l, uint256 id, PoolKey memory key, int24 lower, int24 upper, bytes32 salt)
         internal
         returns (int256 principal0, int256 principal1)
     {
+        (BalanceDelta d, BalanceDelta fees) = _burnPosition(key, lower, upper, salt);
+        _routeLpFees(id, key, l.tokenIsCurrency0, _pos(fees.amount0()), _pos(fees.amount1()));
+        principal0 = int256(d.amount0()) - int256(_pos(fees.amount0()));
+        principal1 = int256(d.amount1()) - int256(_pos(fees.amount1()));
+    }
+
+    function _burnPosition(PoolKey memory key, int24 lower, int24 upper, bytes32 salt)
+        internal
+        returns (BalanceDelta d, BalanceDelta fees)
+    {
         bytes32 positionKey = Position.calculatePositionKey(address(this), lower, upper, salt);
         uint128 liquidity = poolManager.getPositionLiquidity(key.toId(), positionKey);
-        if (liquidity == 0) return (0, 0);
-        (BalanceDelta d, BalanceDelta fees) = poolManager.modifyLiquidity(
+        if (liquidity == 0) return (d, fees);
+        (d, fees) = poolManager.modifyLiquidity(
             key,
             ModifyLiquidityParams({
                 tickLower: lower, tickUpper: upper, liquidityDelta: -int256(uint256(liquidity)), salt: salt
             }),
             ""
         );
-        uint256 f0 = _pos(fees.amount0());
-        uint256 f1 = _pos(fees.amount1());
-        if (f0 > 0) poolManager.take(key.currency0, l.creator, f0);
-        if (f1 > 0) poolManager.take(key.currency1, l.creator, f1);
-        principal0 = int256(d.amount0()) - int256(f0);
-        principal1 = int256(d.amount1()) - int256(f1);
     }
 
     /// @dev Swaps `amountIn` of `from` into `to` through the route pool. Returns the amount received and the

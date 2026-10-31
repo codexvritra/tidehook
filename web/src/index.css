@@ -398,3 +398,5 @@ footer p { margin: 0; max-width: 760px; }
 .spinner { width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; animation: spin 0.7s linear infinite; vertical-align: -2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 sub.zeros { font-size: 0.7em; vertical-align: -0.25em; margin: 0 1px; opacity: 0.85; }
+
+.tax { font-size: 12px; font-weight: 700; text-decoration: underline dotted var(--dim); text-underline-offset: 3px; }

@@ -16,7 +16,11 @@ const FLAG = {
   afterInitialize: 1 << 12,
   beforeSwap: 1 << 7,
   afterSwap: 1 << 6,
+  beforeSwapReturnsDelta: 1 << 3,
+  afterSwapReturnsDelta: 1 << 2,
 };
+// Every hook charges launchpad fees through swap return-deltas.
+const FEES = FLAG.beforeSwap | FLAG.afterSwap | FLAG.beforeSwapReturnsDelta | FLAG.afterSwapReturnsDelta;
 
 const FILE = { TideTokenFactory: "TideToken" };
 const artifact = (name) =>
@@ -52,7 +56,7 @@ const add = (name, code, flags) => {
 const patience = add(
   "PatienceHook",
   initCode("PatienceHook", ["address", "uint24", "uint24", "uint32", "uint32", "uint32"], [POOL_MANAGER, 10_000, 500, 30, 3600, 86_400]),
-  FLAG.beforeInitialize | FLAG.beforeSwap,
+  FLAG.beforeInitialize | FEES,
 );
 const spring = add(
   "SpringHook",
@@ -61,13 +65,13 @@ const spring = add(
     ["address", "uint24", "uint24", "uint24", "uint24", "uint24", "uint32"],
     [POOL_MANAGER, 3000, 500, 50_000, 50, 20, 3600],
   ),
-  FLAG.beforeInitialize | FLAG.afterInitialize | FLAG.beforeSwap,
+  FLAG.beforeInitialize | FLAG.afterInitialize | FEES,
 );
-const bond = add("CreatorBondHook", initCode("CreatorBondHook", ["address"], [POOL_MANAGER]), FLAG.beforeInitialize | FLAG.afterSwap);
+const bond = add("CreatorBondHook", initCode("CreatorBondHook", ["address"], [POOL_MANAGER]), FLAG.beforeInitialize | FEES);
 const session = add(
   "SessionHook",
   initCode("SessionHook", ["address", "address"], [POOL_MANAGER, ZERO]),
-  FLAG.beforeInitialize | FLAG.beforeSwap,
+  FLAG.beforeInitialize | FEES,
 );
 const factory = add("TideTokenFactory", initCode("TideTokenFactory", [], []));
 const migrator = add(

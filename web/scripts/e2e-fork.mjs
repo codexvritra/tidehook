@@ -5,14 +5,15 @@
 // and trades through the router. Uses anvil's well-known dev account; refuses any non-local RPC.
 import { readFileSync } from "node:fs";
 import { createPublicClient, createWalletClient, decodeEventLog, http, parseEther, concat, encodeAbiParameters, keccak256 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 const RPC = process.env.FORK_RPC ?? "http://127.0.0.1:8546";
 if (!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(RPC)) throw new Error("local fork only");
 
 const chain = { id: 4663, name: "robinhood-fork", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [RPC] } } };
-const DEV_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // anvil account #0
-const account = privateKeyToAccount(DEV_KEY);
+// A fresh key per run, funded on the fork. (anvil's well-known account #0 has an EIP-7702 sweeper attached on
+// Robinhood mainnet, so any ETH sent to it is forwarded away; don't use it on a mainnet fork.)
+const account = privateKeyToAccount(generatePrivateKey());
 const pub = createPublicClient({ chain, transport: http(RPC) });
 const wallet = createWalletClient({ chain, transport: http(RPC), account });
 const CREATE2 = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
@@ -45,6 +46,7 @@ const warp = async (sec) => {
   await pub.request({ method: "evm_mine", params: [] });
 };
 
+await pub.request({ method: "anvil_setBalance", params: [account.address, "0x21E19E0C9BAB2400000"] }); // 10,000 ETH
 console.log("1. Deploy via CREATE2 deployer (same txs as the Deploy page)");
 for (const p of plan) {
   ok(keccak256(p.initCode) && p.initCode.length > 2, `${p.name} init code present`);
@@ -65,10 +67,14 @@ const R = { address: A.TideRouter, abi: abi("TideRouter") };
 const ERC = abi("TideToken");
 const MIN = 4295128740n;
 
+const launchFee = await pub.readContract({ ...L, functionName: "launchFee" });
+ok(launchFee > 0n, `launch fee is ${Number(launchFee) / 1e18} ETH`);
+
 async function launch(kind, bps) {
   const r = await write({
     ...L,
     functionName: "launch",
+    value: launchFee,
     args: [
       {
         name: `Fork ${kind}`,
@@ -108,7 +114,7 @@ for (const [kind, name] of [[0, "Patience"], [1, "Spring"], [2, "Bond"], [3, "Se
   ok(true, `${name}: sold half back for ETH`);
 
   const sim = await pub.simulateContract({ account, ...L, functionName: "collectFees", args: [id] });
-  ok(sim.result[0] + sim.result[1] > 0n, `${name}: creator fees accrued (${sim.result[0]} wei ETH)`);
+  ok(sim.result[0] + sim.result[1] > 0n, `${name}: LP fees accrued for the platform (${sim.result[0]} wei ETH)`);
 }
 
 console.log("3. Patience slow lane: commit, wait, reveal through the router");
@@ -130,6 +136,35 @@ console.log("3. Patience slow lane: commit, wait, reveal through the router");
   const { result: [, slowOut] } = await pub.simulateContract({ account, ...R, functionName: "quoteExactIn", args: [{ ...swap, hookData }] });
   await write({ ...R, functionName: "swapExactIn", args: [{ ...swap, hookData }, account.address, 2n ** 40n], value: amountIn });
   ok(slowOut > fastOut, `slow lane got ${((Number(slowOut - fastOut) / Number(fastOut)) * 100).toFixed(2)}% more tokens than fast lane`);
+}
+
+console.log("3b. Launchpad fees in ETH: buy 1% creator + 1% platform, sell 2% platform");
+{
+  const H = { address: A.SpringHook, abi: abi("SpringHook") };
+  const platform = await pub.readContract({ ...L, functionName: "feeRecipient" });
+  const platformIsMe = platform.toLowerCase() === account.address.toLowerCase();
+  const { key, token } = await launch(1, 0);
+  const c0 = await pub.readContract({ ...H, functionName: "owed", args: [account.address, "0x0000000000000000000000000000000000000000"] });
+  const p0 = await pub.readContract({ ...H, functionName: "owed", args: [A.TideLauncher, "0x0000000000000000000000000000000000000000"] });
+  await write({ ...R, functionName: "swapExactIn", args: [{ key, zeroForOne: true, amountIn: parseEther("1"), minOut: 0n, sqrtPriceLimitX96: MIN, hookData: "0x" }, account.address, 2n ** 40n], value: parseEther("1") });
+  const c1 = await pub.readContract({ ...H, functionName: "owed", args: [account.address, "0x0000000000000000000000000000000000000000"] });
+  const p1 = await pub.readContract({ ...H, functionName: "owed", args: [A.TideLauncher, "0x0000000000000000000000000000000000000000"] });
+  ok(c1 - c0 === parseEther("0.01") && p1 - p0 === parseEther("0.01"), "1 ETH buy: 0.01 ETH to creator, 0.01 ETH to platform");
+  const tokOwed = await pub.readContract({ ...H, functionName: "owed", args: [account.address, token] });
+  ok(tokOwed === 0n, "no fees ever accrue in the launched token");
+  const bal = await pub.readContract({ address: token, abi: ERC, functionName: "balanceOf", args: [account.address] });
+  await write({ address: token, abi: ERC, functionName: "approve", args: [A.TideRouter, bal] });
+  await write({ ...R, functionName: "swapExactIn", args: [{ key, zeroForOne: false, amountIn: bal / 2n, minOut: 1n, sqrtPriceLimitX96: 0n, hookData: "0x" }, account.address, 2n ** 40n] });
+  const p2 = await pub.readContract({ ...H, functionName: "owed", args: [A.TideLauncher, "0x0000000000000000000000000000000000000000"] });
+  ok(p2 > p1, `sell: platform earned ${(Number(p2 - p1) / 1e18).toFixed(6)} ETH (2%)`);
+  const e0 = await pub.getBalance({ address: account.address });
+  await write({ ...H, functionName: "claim", args: ["0x0000000000000000000000000000000000000000"] });
+  const e1 = await pub.getBalance({ address: account.address });
+  ok(e1 > e0, `creator claimed ${(Number(e1 - e0) / 1e18).toFixed(6)} ETH (net of gas)`);
+  const w0 = await pub.getBalance({ address: platform });
+  await write({ ...H, functionName: "claimPlatform", args: [A.TideLauncher, "0x0000000000000000000000000000000000000000"] });
+  const w1 = await pub.getBalance({ address: platform });
+  ok(platformIsMe ? w1 > w0 - parseEther("0.001") : w1 > w0, "platform fees sent to the platform wallet");
 }
 
 console.log("4. Rename and hook upgrade after launch");

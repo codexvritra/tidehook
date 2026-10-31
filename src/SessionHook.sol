@@ -7,7 +7,7 @@ import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {TideBaseHook} from "./base/TideBaseHook.sol";
+import {TideFeeHook} from "./base/TideFeeHook.sol";
 
 /// @title SessionHook — fees that follow the stock market's clock
 /// @notice Built for pools that pair against tokenized equities on Robinhood Chain. When the
@@ -17,7 +17,7 @@ import {TideBaseHook} from "./base/TideBaseHook.sol";
 ///         and highest on weekends and listed holidays (the longest gaps).
 /// @dev    Session times are UTC seconds-of-day, set by the owner so DST shifts and the exchange
 ///         holiday calendar can be maintained without redeploying.
-contract SessionHook is TideBaseHook {
+contract SessionHook is TideFeeHook {
     using LPFeeLibrary for uint24;
 
     error MustUseDynamicFee();
@@ -54,7 +54,7 @@ contract SessionHook is TideBaseHook {
 
     /// @param _owner Schedule admin. Zero means the deploying EOA, which keeps the CREATE2 init code (and so
     ///        the hook address) independent of who deploys it.
-    constructor(IPoolManager _poolManager, address _owner) TideBaseHook(_poolManager) {
+    constructor(IPoolManager _poolManager, address _owner) TideFeeHook(_poolManager) {
         owner = _owner == address(0) ? tx.origin : _owner;
         // NYSE in EDT (UTC-4): pre 08:00, open 13:30, close 20:00, post 24:00 UTC.
         _setSchedule(Schedule({preOpen: 8 hours, open: 13 hours + 30 minutes, close: 20 hours, postClose: 24 hours}));
@@ -69,6 +69,9 @@ contract SessionHook is TideBaseHook {
     function getHookPermissions() public pure override returns (Hooks.Permissions memory p) {
         p.beforeInitialize = true;
         p.beforeSwap = true;
+        p.afterSwap = true;
+        p.beforeSwapReturnDelta = true;
+        p.afterSwapReturnDelta = true;
     }
 
     function sessionAt(uint256 timestamp) public view returns (Session) {
@@ -88,27 +91,24 @@ contract SessionHook is TideBaseHook {
         return fees[uint256(sessionAt(block.timestamp))];
     }
 
-    function beforeInitialize(address, PoolKey calldata key, uint160)
+    function beforeInitialize(address sender, PoolKey calldata key, uint160)
         external
-        view
         override
         onlyPoolManager
         returns (bytes4)
     {
         if (!key.fee.isDynamicFee()) revert MustUseDynamicFee();
+        _recordInitializer(sender, key);
         return this.beforeInitialize.selector;
     }
 
-    function beforeSwap(address, PoolKey calldata, SwapParams calldata, bytes calldata)
+    function beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
         external
-        view
         override
         onlyPoolManager
         returns (bytes4, BeforeSwapDelta, uint24)
     {
-        return (
-            this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, currentFee() | LPFeeLibrary.OVERRIDE_FEE_FLAG
-        );
+        return (this.beforeSwap.selector, _feeBefore(key, params), currentFee() | LPFeeLibrary.OVERRIDE_FEE_FLAG);
     }
 
     // ---------------------------------------------------------------- admin

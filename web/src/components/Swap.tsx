@@ -242,7 +242,11 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
             <b className="mono">{quote ? `${fmtNum(Number(formatUnits(quote.out, outDecimals)))} ${outSymbol}` : amountIn > 0n && !quoteErr ? "…" : "—"}</b>
           </div>
           <div>
-            <span className="dim">Hook fee</span>
+            <span className="dim">Launchpad tax</span>
+            <span className="mono">{buy ? "2% (1% creator · 1% platform)" : "2% (platform)"}</span>
+          </div>
+          <div>
+            <span className="dim">Hook LP fee</span>
             <span className="mono">{quote ? pctStr(quote.fee) : "—"}</span>
           </div>
           <div>

@@ -8,7 +8,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {TideBaseHook} from "./base/TideBaseHook.sol";
+import {TideFeeHook} from "./base/TideFeeHook.sol";
 
 /// @title PatienceHook — "pay less for waiting"
 /// @notice A two-lane fee market. The fast lane swaps immediately at `baseFee`. The slow lane
@@ -20,7 +20,7 @@ import {TideBaseHook} from "./base/TideBaseHook.sol";
 ///           front-run from the commit transaction.
 ///         Ages are measured in seconds, not blocks: on Arbitrum-Orbit chains such as Robinhood
 ///         Chain `block.number` tracks L1, so timestamps are the reliable clock.
-contract PatienceHook is TideBaseHook {
+contract PatienceHook is TideFeeHook {
     using PoolIdLibrary for PoolKey;
     using LPFeeLibrary for uint24;
 
@@ -57,7 +57,7 @@ contract PatienceHook is TideBaseHook {
         uint32 _minAge,
         uint32 _rampDuration,
         uint32 _maxAge
-    ) TideBaseHook(_poolManager) {
+    ) TideFeeHook(_poolManager) {
         require(_minFee <= _baseFee && _baseFee <= LPFeeLibrary.MAX_LP_FEE, "fees");
         require(_rampDuration > 0 && _minAge + _rampDuration <= _maxAge, "timing");
         baseFee = _baseFee;
@@ -70,6 +70,9 @@ contract PatienceHook is TideBaseHook {
     function getHookPermissions() public pure override returns (Hooks.Permissions memory p) {
         p.beforeInitialize = true;
         p.beforeSwap = true;
+        p.afterSwap = true;
+        p.beforeSwapReturnDelta = true;
+        p.afterSwapReturnDelta = true;
     }
 
     /// @notice Hash a swap the same way the hook will when it is revealed.
@@ -107,13 +110,14 @@ contract PatienceHook is TideBaseHook {
         return uint24(baseFee - (uint256(baseFee - minFee) * elapsed) / rampDuration);
     }
 
-    function beforeInitialize(address, PoolKey calldata key, uint160)
+    function beforeInitialize(address sender, PoolKey calldata key, uint160)
         external
         override
         onlyPoolManager
         returns (bytes4)
     {
         if (!key.fee.isDynamicFee()) revert MustUseDynamicFee();
+        _recordInitializer(sender, key);
         initializedAt[key.toId()] = uint64(block.timestamp);
         return this.beforeInitialize.selector;
     }
@@ -142,6 +146,6 @@ contract PatienceHook is TideBaseHook {
             emit Redeemed(commitment, id, age, fee);
         }
 
-        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, fee | LPFeeLibrary.OVERRIDE_FEE_FLAG);
+        return (this.beforeSwap.selector, _feeBefore(key, params), fee | LPFeeLibrary.OVERRIDE_FEE_FLAG);
     }
 }

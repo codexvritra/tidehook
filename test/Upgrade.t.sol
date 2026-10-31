@@ -101,7 +101,8 @@ contract UpgradeTest is TideStack {
         launcher.executeMigration(id, 0);
 
         vm.warp(block.timestamp + 1 days);
-        uint256 creatorEthBefore = address(this).balance;
+        address platform = launcher.feeRecipient();
+        uint256 platformEthBefore = platform.balance;
         launcher.executeMigration(id, 0);
 
         TideLauncherBase.Launch memory l = launcher.getLaunch(id);
@@ -114,7 +115,7 @@ contract UpgradeTest is TideStack {
         (, int24 newTick,,) = manager.getSlot0(l.key.toId());
         assertApproxEqAbs(int256(newTick), int256(oldTick), 200);
         assertEq(manager.getLiquidity(before.key.toId()), 0, "old pool fully drained into the new one");
-        assertGt(address(this).balance, creatorEthBefore, "accrued fees paid to the creator on the way out");
+        assertGt(platform.balance, platformEthBefore, "accrued LP fees routed to the platform on the way out");
         assertEq(PoolId.unwrap(launcher.pastPools(id)[0]), PoolId.unwrap(before.key.toId()));
         assertEq(ERC20(token).balanceOf(address(launcher)), 0);
 

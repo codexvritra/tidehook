@@ -22,6 +22,10 @@ import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 import {TideToken, TideTokenFactory} from "./TideToken.sol";
 import {CreatorBondHook} from "./CreatorBondHook.sol";
 
+interface ITideFeeHook {
+    function registerFees(PoolKey calldata key, address creator, bool quoteIs0) external;
+}
+
 /// @title TideLauncherBase
 /// @notice Shared types, storage layout and helpers for TideLauncher and its delegate TideMigrator.
 ///         Both inherit this and declare no storage of their own, so the layouts are identical.
@@ -114,10 +118,15 @@ abstract contract TideLauncherBase {
     event QuoteAllowed(address indexed quote, bool allowed);
     event RouteSet(address indexed currency0, address indexed currency1, PoolId poolId);
     event AdminSet(address admin);
+    event FeeRecipientSet(address feeRecipient);
+    event LaunchFeeSet(uint256 launchFee);
+    event LpFeesRouted(uint256 indexed id, uint256 quoteToPlatform, uint256 tokenBurned);
 
     error NotPoolManager();
     error NotCreator();
     error NotAdmin();
+    error LaunchFeeUnpaid(uint256 required);
+    error EthTransferFailed();
     error UnknownLaunch();
     error BadParams(string reason);
     error RenameCooldown(uint256 readyAt);
@@ -147,6 +156,10 @@ abstract contract TideLauncherBase {
 
     /// @notice Curates which quote assets launches may migrate to, and the route pools used to convert.
     address public admin;
+    /// @notice Platform wallet: receives the launch fee, platform trading fees and LP fees, all in ETH/quote.
+    address public feeRecipient;
+    /// @notice Launch fee in wei (about $3; the admin updates it as the ETH price moves).
+    uint256 public launchFee;
     mapping(address => bool) public quoteAllowed;
     mapping(bytes32 => PoolKey) internal _routes;
 
@@ -205,6 +218,21 @@ abstract contract TideLauncherBase {
         if (r * 2 >= TICK_SPACING) t += TICK_SPACING;
         else if (r * 2 <= -TICK_SPACING) t -= TICK_SPACING;
         return t;
+    }
+
+    /// @dev Turns on the hook's launchpad fees for a pool this contract initialized.
+    function _registerFees(PoolKey memory key, address creator, bool tokenIs0) internal {
+        ITideFeeHook(address(key.hooks)).registerFees(key, creator, !tokenIs0);
+    }
+
+    /// @dev LP fees from the locked liquidity: the quote side goes to the platform wallet, the token side is burned,
+    ///      so nobody ever gets paid in the launched token.
+    function _routeLpFees(uint256 id, PoolKey memory key, bool tokenIs0, uint256 a0, uint256 a1) internal {
+        (Currency quote, uint256 q, Currency token, uint256 t) =
+            tokenIs0 ? (key.currency1, a1, key.currency0, a0) : (key.currency0, a0, key.currency1, a1);
+        if (q > 0) poolManager.take(quote, feeRecipient, q);
+        if (t > 0) poolManager.take(token, BURN, t);
+        if (q + t > 0) emit LpFeesRouted(id, q, t);
     }
 
     function _pairKey(address a, address b) internal pure returns (bytes32) {

@@ -9,6 +9,10 @@ import { tideLauncherAbi } from "../lib/abis";
 import { ADDR } from "../lib/chain";
 import { isAddress } from "viem";
 import { Spinner } from "../components/bits";
+import { EarningsPanel } from "../components/Earnings";
+import { usd, useEthUsd } from "../lib/ethPrice";
+import { ETH } from "../lib/chain";
+import { parseEther } from "viem";
 
 type Item = { name: string; address: Address; salt: Hex; initCode: Hex };
 
@@ -151,9 +155,126 @@ export function Deploy() {
             <span className="mono">deployments/robinhood.json</span>, and the forge script deploys the same bytes.
           </p>
         </div>
+        {done && <PlatformPanel />}
         {done && <AdminPanel />}
       </div>
     </section>
+  );
+}
+
+/** Platform admin: fee wallet, launch fee (set in dollars), platform fee payouts and LP-fee sweeps. */
+function PlatformPanel() {
+  const { session, toast } = useApp();
+  const ethUsd = useEthUsd();
+  const [cfg, , reload] = usePoll(
+    async () => {
+      const [admin, wallet, fee, count] = await Promise.all([
+        client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "admin" }),
+        client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "feeRecipient" }),
+        client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "launchFee" }),
+        client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "launchCount" }),
+      ]);
+      return { admin, wallet, fee, count: Number(count) };
+    },
+    60_000,
+    [],
+  );
+  const [wallet, setWallet] = useState("");
+  const [feeUsd, setFeeUsd] = useState("3");
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!session || !cfg || session.account.toLowerCase() !== cfg.admin.toLowerCase()) return null;
+  const feeEth = Number(Number(formatEther(cfg.fee)).toPrecision(4));
+
+  async function call(label: string, fn: string, args: readonly unknown[], ok: string) {
+    if (!session) return;
+    setBusy(label);
+    try {
+      await sendTx(session, { address: ADDR.launcher, abi: tideLauncherAbi, functionName: fn, args });
+      toast(ok);
+      reload();
+    } catch (e) {
+      toast(errMsg(e), "err");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sweepAll() {
+    if (!session || !cfg) return;
+    setBusy("sweep");
+    let swept = 0;
+    try {
+      for (let id = 0; id < cfg.count; id++) {
+        try {
+          const { result } = await client.simulateContract({ account: session.account, address: ADDR.launcher, abi: tideLauncherAbi, functionName: "collectFees", args: [BigInt(id)] });
+          if (result[0] + result[1] === 0n) continue;
+        } catch {
+          continue;
+        }
+        await sendTx(session, { address: ADDR.launcher, abi: tideLauncherAbi, functionName: "collectFees", args: [BigInt(id)] });
+        swept++;
+      }
+      toast(swept ? `Swept LP fees from ${swept} launch${swept === 1 ? "" : "es"}: ETH to the platform wallet, tokens burned.` : "No LP fees to sweep yet.");
+    } catch (e) {
+      toast(errMsg(e), "err");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const newFeeWei = ethUsd && Number(feeUsd) > 0 ? parseEther((Number(feeUsd) / ethUsd).toFixed(18)) : null;
+
+  return (
+    <>
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="panel-head">
+          <span className="tag">Platform</span>
+          <span className="pill tide">you are admin</span>
+        </div>
+        <dl className="kv">
+          <dt>Platform wallet</dt>
+          <dd>
+            <a href={explorer(cfg.wallet)} target="_blank" rel="noreferrer">
+              {short(cfg.wallet)}
+            </a>
+          </dd>
+          <dt>Launch fee</dt>
+          <dd className="lime">
+            {feeEth} ETH {ethUsd ? `≈ ${usd(feeEth, ethUsd)}` : ""}
+          </dd>
+          <dt>Trading fees</dt>
+          <dd>buy 1% creator + 1% platform · sell 2% platform</dd>
+        </dl>
+        <div className="row">
+          <div className="field" style={{ flex: "1 1 320px" }}>
+            <label>New platform wallet</label>
+            <input className="input" placeholder="0x…" value={wallet} onChange={(e) => setWallet(e.target.value.trim())} />
+          </div>
+          <button className="btn primary" disabled={!!busy || !isAddress(wallet)} onClick={() => call("wallet", "setFeeRecipient", [wallet as Address], "Platform wallet updated.")}>
+            {busy === "wallet" ? <Spinner /> : "Set wallet"}
+          </button>
+        </div>
+        <div className="row">
+          <div className="field" style={{ flex: "1 1 200px" }}>
+            <label>
+              <span>Launch fee in USD</span>
+              <span className="dim">{newFeeWei ? `= ${Number(formatEther(newFeeWei)).toFixed(6)} ETH at $${ethUsd?.toFixed(0)}` : "needs ETH price"}</span>
+            </label>
+            <input className="input" inputMode="decimal" value={feeUsd} onChange={(e) => setFeeUsd(e.target.value)} />
+          </div>
+          <button className="btn primary" disabled={!!busy || !newFeeWei} onClick={() => newFeeWei && call("fee", "setLaunchFee", [newFeeWei], "Launch fee updated.")}>
+            {busy === "fee" ? <Spinner /> : "Set launch fee"}
+          </button>
+        </div>
+        <p className="note">The launch fee is stored on-chain in ETH. Re-set it here when the ETH price moves to keep it near $3.</p>
+        <button className="btn" disabled={!!busy || cfg.count === 0} onClick={sweepAll}>
+          {busy === "sweep" ? <Spinner /> : `Sweep LP fees from all ${cfg.count} launches`}
+        </button>
+      </div>
+      <div style={{ marginTop: 16, maxWidth: 480 }}>
+        <EarningsPanel asset={{ address: ETH, symbol: "ETH", decimals: 18 }} mode="platform" />
+      </div>
+    </>
   );
 }
 

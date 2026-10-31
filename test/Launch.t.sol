@@ -41,13 +41,35 @@ abstract contract TideStack is Test, Deployers {
 
     function _deployStack(IPoolManager pm) internal {
         uint160 base = uint160(0x7175) << 144;
-        address p = address(base | uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG) | (1 << 20));
-        address s = address(
-            base | uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG)
-                | (2 << 20)
+        address p = address(
+            base
+                | uint160(
+                    Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                        | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+                ) | (1 << 20)
         );
-        address b = address(base | uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_SWAP_FLAG) | (3 << 20));
-        address c = address(base | uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG) | (4 << 20));
+        address s = address(
+            base
+                | uint160(
+                    Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG
+                        | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
+                        | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+                ) | (2 << 20)
+        );
+        address b = address(
+            base
+                | uint160(
+                    Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                        | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+                ) | (3 << 20)
+        );
+        address c = address(
+            base
+                | uint160(
+                    Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                        | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+                ) | (4 << 20)
+        );
         deployCodeTo(
             "PatienceHook.sol:PatienceHook",
             abi.encode(pm, uint24(10_000), uint24(500), uint32(30), uint32(1 hours), uint32(1 days)),
@@ -66,6 +88,8 @@ abstract contract TideStack is Test, Deployers {
         session = SessionHook(c);
         launcher = new TideLauncher(pm, new TideTokenFactory(), new TideMigrator(pm, p, s, b, c), p, s, b, c);
         router = new TideRouter(pm);
+        vm.prank(launcher.admin());
+        launcher.setLaunchFee(0);
     }
 
     function _params(TideLauncherBase.Kind kind, address quote, int24 startTick, uint16 bps)
@@ -233,9 +257,8 @@ contract LaunchTest is TideStack {
         bondHook.slash(l.key);
     }
 
-    function test_collectFees_paysCreator() public {
+    function test_collectFees_lpFeesToPlatformInEth_tokenSideBurned() public {
         address creator = address(0xFEE5);
-        vm.deal(creator, 0);
         vm.prank(creator);
         (uint256 id, address token) = launcher.launch(_params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 500));
         PoolKey memory k = launcher.getLaunch(id).key;
@@ -243,15 +266,17 @@ contract LaunchTest is TideStack {
         uint256 bought = _buy(k, 5 ether, "");
         _sell(k, token, uint128(bought / 2));
 
-        vm.expectRevert(TideLauncherBase.NotCreator.selector);
-        launcher.collectFees(id);
-
-        vm.prank(creator);
+        address platform = launcher.feeRecipient();
+        uint256 platformEth = platform.balance;
+        uint256 burnedBefore = ERC20(token).balanceOf(launcher.BURN());
+        vm.prank(address(0xA11CE)); // anyone can trigger it; nobody but the platform/burn receives anything
         (uint256 fee0, uint256 fee1) = launcher.collectFees(id);
-        assertApproxEqRel(fee0, 0.05 ether, 0.01e18, "1% of the ETH bought");
-        assertGt(fee1, 0, "1% of the tokens sold");
-        assertEq(creator.balance, fee0);
-        assertEq(ERC20(token).balanceOf(creator), fee1);
+        assertGt(fee0, 0, "ETH-side LP fees");
+        assertGt(fee1, 0, "token-side LP fees");
+        assertEq(platform.balance - platformEth, fee0, "ETH LP fees to the platform wallet");
+        assertEq(ERC20(token).balanceOf(launcher.BURN()) - burnedBefore, fee1, "token LP fees burned");
+        assertEq(creator.balance, 0);
+        assertEq(ERC20(token).balanceOf(address(0xA11CE)), 0);
     }
 
     function test_session_erc20QuotedLaunch_bothOrientations() public {

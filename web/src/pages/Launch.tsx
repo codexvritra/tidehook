@@ -6,6 +6,10 @@ import { ADDR, ETH } from "../lib/chain";
 import { KINDS, KIND_BLURB, readAsset, type Asset } from "../lib/data";
 import { floorTickFor, fmtNum, mcapForStartTick, startTickForMcap } from "../lib/price";
 import { errMsg, sendTx } from "../lib/tx";
+import { usd, useEthUsd } from "../lib/ethPrice";
+import { client } from "../lib/chain";
+import { usePoll } from "../lib/data";
+import { formatEther } from "viem";
 import { Avatar, Spinner } from "../components/bits";
 
 const KIND_DETAIL = [
@@ -31,6 +35,13 @@ export function LaunchPage() {
   const [vestDays, setVestDays] = useState(30);
   const [graceHours, setGraceHours] = useState(24);
   const [busy, setBusy] = useState(false);
+  const [launchFee] = usePoll(
+    () => (deploy?.ready ? client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "launchFee" }) : Promise.resolve(undefined)),
+    60_000,
+    [deploy?.ready],
+  );
+  const ethUsd = useEthUsd();
+  const feeEth = launchFee !== undefined ? Number(Number(formatEther(launchFee)).toPrecision(4)) : null;
 
   useEffect(() => {
     if (quoteMode === "eth") return setAsset({ address: ETH, symbol: "ETH", decimals: 18 });
@@ -87,6 +98,7 @@ export function LaunchPage() {
             grace: BigInt(graceHours * 3600),
           },
         ],
+        value: launchFee ?? 0n,
       });
       const ev = receipt.logs
         .filter((l) => l.address.toLowerCase() === ADDR.launcher.toLowerCase())
@@ -263,8 +275,14 @@ export function LaunchPage() {
             <dd className="mono">{plan ? `${fmtNum(plan.actualMcap)} ${asset?.symbol}` : "—"}</dd>
             <dt>Start price</dt>
             <dd className="mono">{plan ? `${(plan.actualMcap / 1e9).toExponential(3)} ${asset?.symbol}` : "—"}</dd>
-            <dt>Pool fee</dt>
+            <dt>Hook LP fee</dt>
             <dd>{["1% → 0.05%", "0.05%–5%", "1%", "0.05%–2%"][kind]}</dd>
+            <dt>Buy tax</dt>
+            <dd>1% to you + 1% platform</dd>
+            <dt>Sell tax</dt>
+            <dd>2% platform</dd>
+            <dt>Launch fee</dt>
+            <dd className="lime">{feeEth !== null ? `${feeEth} ETH ${ethUsd ? `≈ ${usd(feeEth, ethUsd)}` : ""}` : "—"}</dd>
           </dl>
           <button className="btn primary block" disabled={busy || errors.length > 0 || !deploy?.ready} onClick={submit}>
             {busy ? (
@@ -282,7 +300,10 @@ export function LaunchPage() {
           ) : errors.length > 0 ? (
             <p className="note">Missing: {errors.join(", ")}</p>
           ) : (
-            <p className="note">One transaction. Only gas: there's no launch fee.</p>
+            <p className="note">
+              One transaction: launch fee {feeEth !== null ? `${feeEth} ETH` : ""} plus gas. You earn 1% of every buy in ETH, and
+              can claim it from your token page any time.
+            </p>
           )}
         </aside>
       </div>

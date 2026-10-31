@@ -63,7 +63,13 @@ contract ForkTest is Test, Deployers {
     }
 
     function test_fork_allHooksLiveOnRealPoolManager() public {
-        address p = _addr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG), 0x71de);
+        address p = _addr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                    | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            ),
+            0x71de
+        );
         deployCodeTo(
             "PatienceHook.sol:PatienceHook",
             abi.encode(manager, uint24(10_000), uint24(500), uint32(30), uint32(1 hours), uint32(1 days)),
@@ -73,8 +79,13 @@ contract ForkTest is Test, Deployers {
             initPoolAndAddLiquidity(currency0, currency1, IHooks(p), LPFeeLibrary.DYNAMIC_FEE_FLAG, SQRT_PRICE_1_1);
         _swapBothWays(k);
 
-        address s =
-            _addr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG), 0x71df);
+        address s = _addr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG
+                    | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            ),
+            0x71df
+        );
         deployCodeTo(
             "SpringHook.sol:SpringHook",
             abi.encode(manager, uint24(3000), uint24(500), uint24(50_000), uint24(50), uint24(20), uint32(1 hours)),
@@ -83,12 +94,24 @@ contract ForkTest is Test, Deployers {
         (k,) = initPoolAndAddLiquidity(currency0, currency1, IHooks(s), LPFeeLibrary.DYNAMIC_FEE_FLAG, SQRT_PRICE_1_1);
         _swapBothWays(k);
 
-        address b = _addr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_SWAP_FLAG), 0x71e0);
+        address b = _addr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                    | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            ),
+            0x71e0
+        );
         deployCodeTo("CreatorBondHook.sol:CreatorBondHook", abi.encode(manager), b);
         (k,) = initPoolAndAddLiquidity(currency0, currency1, IHooks(b), 3000, SQRT_PRICE_1_1);
         _swapBothWays(k);
 
-        address c = _addr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG), 0x71e1);
+        address c = _addr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                    | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            ),
+            0x71e1
+        );
         deployCodeTo("SessionHook.sol:SessionHook", abi.encode(manager, address(this)), c);
         (k,) = initPoolAndAddLiquidity(currency0, currency1, IHooks(c), LPFeeLibrary.DYNAMIC_FEE_FLAG, SQRT_PRICE_1_1);
         _swapBothWays(k);

@@ -53,7 +53,12 @@ contract TidehookTest is Test, Deployers {
     // ------------------------------------------------------------------ PatienceHook
 
     function _deployPatience() internal returns (PatienceHook hook) {
-        address a = _hookAddr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG));
+        address a = _hookAddr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                    | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            )
+        );
         deployCodeTo(
             "PatienceHook.sol:PatienceHook",
             abi.encode(manager, uint24(10_000), uint24(500), uint32(30), uint32(3600), uint32(1 days)),
@@ -144,8 +149,12 @@ contract TidehookTest is Test, Deployers {
     // ------------------------------------------------------------------ SpringHook
 
     function test_spring_stretchCostsMoreRestoreCostsLess() public {
-        address a =
-            _hookAddr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG));
+        address a = _hookAddr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG
+                    | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            )
+        );
         deployCodeTo(
             "SpringHook.sol:SpringHook",
             abi.encode(manager, uint24(3000), uint24(500), uint24(50_000), uint24(50), uint24(20), uint32(1 hours)),
@@ -183,7 +192,12 @@ contract TidehookTest is Test, Deployers {
     // ------------------------------------------------------------------ CreatorBondHook
 
     function _bonded() internal returns (CreatorBondHook hook, PoolKey memory k, PoolId id) {
-        address a = _hookAddr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_SWAP_FLAG));
+        address a = _hookAddr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                    | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            )
+        );
         deployCodeTo("CreatorBondHook.sol:CreatorBondHook", abi.encode(manager), a);
         hook = CreatorBondHook(a);
         (k, id) = initPoolAndAddLiquidity(currency0, currency1, IHooks(a), 3000, SQRT_PRICE_1_1);
@@ -267,7 +281,12 @@ contract TidehookTest is Test, Deployers {
     // ------------------------------------------------------------------ SessionHook
 
     function test_session_clock() public {
-        address a = _hookAddr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG));
+        address a = _hookAddr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                    | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            )
+        );
         deployCodeTo("SessionHook.sol:SessionHook", abi.encode(manager, address(this)), a);
         SessionHook hook = SessionHook(a);
 
@@ -309,8 +328,12 @@ contract TidehookTest is Test, Deployers {
     }
 
     function testFuzz_spring_feeBounded(int24 tick, bool zeroForOne, uint160 limit) public {
-        address a =
-            _hookAddr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG));
+        address a = _hookAddr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG
+                    | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            )
+        );
         deployCodeTo(
             "SpringHook.sol:SpringHook",
             abi.encode(manager, uint24(3000), uint24(500), uint24(50_000), uint24(50), uint24(20), uint32(1 hours)),
@@ -324,7 +347,12 @@ contract TidehookTest is Test, Deployers {
     }
 
     function testFuzz_session_alwaysAKnownFee(uint256 t) public {
-        address a = _hookAddr(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG));
+        address a = _hookAddr(
+            uint160(
+                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                    | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            )
+        );
         deployCodeTo("SessionHook.sol:SessionHook", abi.encode(manager, address(this)), a);
         t = bound(t, 0, type(uint40).max);
         vm.warp(t);

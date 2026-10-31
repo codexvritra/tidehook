@@ -27,13 +27,13 @@ the low 14 address bits equal the hook's Uniswap v4 permission flags.
 
 | Contract | Address | Role |
 |---|---|---|
-| PatienceHook | `0xc061bAc04CA08d8EFCFB14Ad868B94d5C7EB2080` | commit-reveal fee lane |
-| SpringHook | `0xdf0E706bD5EFaF7DC630A9f0f499320064507080` | restoring-force fees |
-| CreatorBondHook | `0x71B0A0445D5443FcB94333d5C93fD5967B5CE040` | creator escrow and floor |
-| SessionHook | `0x217D7357D41A99aef9F206fA042281578Cb8A080` | market-session fees |
+| PatienceHook | `0xE8BB9967aAE67eE11b71FB628b6337F7A1eA60cC` | commit-reveal fee lane |
+| SpringHook | `0x96b0b6Cd46FAcC24e9444d58cd7419526d9bb0Cc` | restoring-force fees |
+| CreatorBondHook | `0x21e09C444a44514201B82bba845974d1Da2Da0Cc` | creator escrow and floor |
+| SessionHook | `0x7Cf1E2709b7C57c91868638ce1Eb8577d3C4E0cc` | market-session fees |
 | TideTokenFactory | `0xb265288f662E0bEFeCeE549690FacEc2e2886CEA` | deploys each launch's ERC20 |
-| TideMigrator | `0x691f10453e761c74D210a93472FF95347f781b80` | liquidity migration logic (delegatecall from the launcher only) |
-| TideLauncher | `0xcD5C782670c688C5C4D504f36e4D40422D7B3f8E` | launch, fees, rename, migrate |
+| TideMigrator | `0x094D8Ad006AB85425742D8D9DA209Dce6bCc9c78` | liquidity migration logic (delegatecall from the launcher only) |
+| TideLauncher | `0x4588f599183CD38e92db7B0EF21d6b1A637F97ee` | launch (+ launch fee), LP-fee routing, rename, migrate |
 | TideRouter | `0x026b7469bE095D42D732A390E93c168992F8bd73` | swaps with quotes, slippage, deadline, ETH refunds |
 
 Uniswap v4 PoolManager: `0x8366a39CC670B4001A1121B8F6A443A643e40951` (verified on-chain).
@@ -67,6 +67,25 @@ are hard-capped at 5%.
 
 Launch prices are given in one fixed orientation (quote as currency0). The launcher flips them when the new token
 sorts first, so the frontend never has to predict the token's address.
+
+## Fees (all paid in ETH, never in the launched token)
+
+| What | Amount | Goes to |
+|---|---|---|
+| Launch fee | ~$3 in ETH (admin-set, stored in wei) | platform wallet |
+| Buy tax | 1% of the ETH spent | token creator |
+| Buy tax | 1% of the ETH spent | platform wallet |
+| Sell tax | 2% of the ETH received | platform wallet |
+| LP fees earned by the locked liquidity | the hook's fee (varies by hook) | ETH side → platform wallet, token side → burned |
+
+So across a $100 buy and a $100 sell, the creator earns $1 and the platform $3, plus LP fees.
+
+The buy and sell taxes are enforced **inside the v4 hooks** (`TideFeeHook`) with swap return-deltas, so trading through
+any router or aggregator pays them. They are charged in the pool's quote asset: ETH for ETH pairs, or the quote token
+for ERC20 pairs, never the launched token. Fees accrue as ERC-6909 claims in the PoolManager, so no ETH moves
+mid-swap and a payee that rejects ETH can never block trading. Creators claim from their token page (`claim`), and anyone can push
+platform fees to the platform wallet (`claimPlatform`). The admin sets the platform wallet (`setFeeRecipient`) and
+the launch fee (`setLaunchFee`; the Deploy page converts $3 at the current ETH price).
 
 ## After launch: no cap, rename, upgrade
 
@@ -111,10 +130,10 @@ cd web && npm install && npm run dev
 
 | Check | Result |
 |---|---|
-| Unit, regression and fuzz tests (`forge test`) | 35 pass |
-| Live fork tests: every hook, then launch → buy → sell → collect, plus rename and hook upgrade, on the real Robinhood PoolManager | pass |
+| Unit, regression, fee and fuzz tests (`forge test`) | 47 pass |
+| Live fork tests: every hook, then launch → buy → sell → collect, plus rename and hook upgrade, on the real Robinhood PoolManager (3 tests) | pass |
 | E2E rehearsal (`web/scripts/e2e-fork.mjs`): the exact deploy txs, then every hook traded through the router, on a mainnet fork | pass |
-| Real UI driven end to end on a mainnet fork: deploy, launch, buy, commit/reveal, approve + sell, collect fees, every hook panel, rename, announce → execute migration, trade on the upgraded pool | pass |
+| Real UI driven end to end on a mainnet fork: deploy, set the $3 launch fee, launch (paying it), buy, creator ETH claim, commit/reveal, approve + sell, every hook panel, rename, announce → execute migration, trade on the upgraded pool | pass |
 | `forge script` dry-run against live mainnet state lands every contract at its committed address | pass |
 | Frontend math (commitment hash, fees, sessions) vs contracts | 400/400 match |
 
@@ -153,8 +172,8 @@ be its responsibility, so put it behind a multisig.
 ## Layout
 
 ```
-src/            hooks, TideLauncher (+ TideLauncherBase, TideMigrator), TideRouter, TideToken (+ factory)
-test/           Tidehook.t.sol (hooks), Launch.t.sol (launch/trade/fees), Upgrade.t.sol (rename/migrate), Fork.t.sol (live)
+src/            hooks (+ base/TideFeeHook fee layer), TideLauncher (+ TideLauncherBase, TideMigrator), TideRouter, TideToken (+ factory)
+test/           Tidehook.t.sol (hooks), Launch.t.sol (launch/trade), Fees.t.sol (launch fee, taxes, claims), Upgrade.t.sol (rename/migrate), Fork.t.sol (live)
 script/         Deploy.s.sol (deploys the frozen init code)
 deployments/    robinhood.json (addresses, salts, init code hashes)
 web/            the app; scripts/ regenerates ABIs and addresses and runs the fork E2E

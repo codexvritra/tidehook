@@ -61,10 +61,14 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         migrator = _migrator;
         // The deploying EOA administers routes; keeps the CREATE2 init code independent of who deploys.
         admin = tx.origin;
+        feeRecipient = tx.origin;
+        launchFee = 0.001 ether;
         quoteAllowed[address(0)] = true;
     }
 
-    function launch(LaunchParams calldata p) external returns (uint256 id, address token) {
+    /// @notice Pay `launchFee` in ETH; anything sent above it is refunded.
+    function launch(LaunchParams calldata p) external payable returns (uint256 id, address token) {
+        if (msg.value < launchFee) revert LaunchFeeUnpaid(launchFee);
         _validate(p);
 
         token = tokenFactory.create(p.name, p.symbol, SUPPLY, address(this));
@@ -86,6 +90,8 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         int24 startTick = tokenIs0 ? -p.startTick : p.startTick;
         _openPool(l, p.quote, startTick, SUPPLY - creatorAmount, id);
         _payCreator(l, p, creatorAmount);
+        _sendEth(feeRecipient, launchFee);
+        if (msg.value > launchFee) _sendEth(msg.sender, msg.value - launchFee);
 
         // Rounding dust from the liquidity math is burned, never kept.
         uint256 dust = ERC20(token).balanceOf(address(this));
@@ -106,6 +112,7 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
 
         PoolKey memory key = l.key;
         poolManager.initialize(key, TickMath.getSqrtPriceAtTick(startTick));
+        _registerFees(key, l.creator, tokenIs0);
         poolManager.unlock(abi.encode(Action.Seed, abi.encode(key, l.tickLower, l.tickUpper, amount, tokenIs0, id)));
     }
 
@@ -121,9 +128,10 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         }
     }
 
-    /// @notice Creator collects the swap fees earned by the locked liquidity.
+    /// @notice Anyone: route the LP fees earned by the locked liquidity. The quote side (ETH) goes to the
+    ///         platform wallet and the token side is burned.
     function collectFees(uint256 id) external returns (uint256 amount0, uint256 amount1) {
-        _creatorOf(id);
+        _get(id);
         (amount0, amount1) =
             abi.decode(poolManager.unlock(abi.encode(Action.Collect, abi.encode(id))), (uint256, uint256));
         emit FeesCollected(id, amount0, amount1);
@@ -205,6 +213,26 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         emit RouteSet(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1), key.toId());
     }
 
+    function setFeeRecipient(address wallet) external {
+        if (msg.sender != admin) revert NotAdmin();
+        if (wallet == address(0)) revert BadParams("wallet");
+        feeRecipient = wallet;
+        emit FeeRecipientSet(wallet);
+    }
+
+    function setLaunchFee(uint256 fee) external {
+        if (msg.sender != admin) revert NotAdmin();
+        if (fee > 1 ether) revert BadParams("fee");
+        launchFee = fee;
+        emit LaunchFeeSet(fee);
+    }
+
+    function _sendEth(address to, uint256 amount) internal {
+        if (amount == 0) return;
+        (bool ok,) = to.call{value: amount}("");
+        if (!ok) revert EthTransferFailed();
+    }
+
     function setAdmin(address newAdmin) external {
         if (msg.sender != admin) revert NotAdmin();
         admin = newAdmin;
@@ -248,8 +276,7 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
             a0 += b0;
             a1 += b1;
         }
-        if (a0 > 0) poolManager.take(key.currency0, l.creator, a0);
-        if (a1 > 0) poolManager.take(key.currency1, l.creator, a1);
+        _routeLpFees(id, key, l.tokenIsCurrency0, a0, a1);
         return abi.encode(a0, a1);
     }
 

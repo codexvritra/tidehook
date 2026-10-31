@@ -1,14 +1,16 @@
 // DEVELOPMENT ONLY. Announces an EIP-6963 wallet backed by anvil's well-known dev account so the real UI
 // can be exercised end to end against a LOCAL fork. It is imported only when import.meta.env.DEV is true,
 // VITE_DEV_WALLET=anvil and the RPC is localhost, so it never exists in a production build.
-import { createWalletClient, http, numberToHex, type Hex } from "viem";
+import { createWalletClient, http, keccak256, numberToHex, toBytes, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { robinhood } from "./chain";
 
-const ANVIL_DEV_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // public anvil account #0
+// A fixed throwaway key derived from a public string, funded on the local fork at startup. (anvil's account #0
+// has an EIP-7702 sweeper attached on Robinhood mainnet, so ETH sent to it vanishes on a mainnet fork.)
+const DEV_KEY = keccak256(toBytes("tidehook local fork dev wallet"));
 
 export function installDevWallet() {
-  const account = privateKeyToAccount(ANVIL_DEV_KEY);
+  const account = privateKeyToAccount(DEV_KEY);
   const rpc = robinhood.rpcUrls.default.http[0];
   const wallet = createWalletClient({ account, chain: robinhood, transport: http(rpc) });
 
@@ -50,6 +52,9 @@ export function installDevWallet() {
     on() {},
     removeListener() {},
   };
+
+  // Fund it on the fork (anvil cheat RPC; a no-op error anywhere else).
+  forward("anvil_setBalance", [account.address, "0x21E19E0C9BAB2400000"]).catch(() => {});
 
   const info = {
     uuid: "tidehook-anvil-dev",
