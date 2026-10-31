@@ -4,7 +4,10 @@ import { useApp } from "../lib/appContext";
 import { CREATE2_DEPLOYER, client, explorer } from "../lib/chain";
 import { usePoll } from "../lib/data";
 import { short } from "../lib/format";
-import { errMsg, sendRaw } from "../lib/tx";
+import { errMsg, sendRaw, sendTx } from "../lib/tx";
+import { tideLauncherAbi } from "../lib/abis";
+import { ADDR } from "../lib/chain";
+import { isAddress } from "viem";
 import { Spinner } from "../components/bits";
 
 type Item = { name: string; address: Address; salt: Hex; initCode: Hex };
@@ -14,7 +17,9 @@ const ROLE: Record<string, string> = {
   SpringHook: "Restoring-force fees",
   CreatorBondHook: "Creator escrow and floor",
   SessionHook: "Market-session fees",
-  TideLauncher: "Token + pool + locked liquidity in one tx",
+  TideLauncher: "Token + pool + locked liquidity in one tx; rename and migrate",
+  TideTokenFactory: "Deploys each launch's ERC20",
+  TideMigrator: "Moves locked liquidity to a new hook or pair",
   TideRouter: "Swaps with quotes, slippage and refunds",
 };
 
@@ -140,12 +145,106 @@ export function Deploy() {
             {session && bal !== undefined && <span className="note" style={{ margin: 0 }}>Your balance: {Number(formatEther(bal)).toFixed(5)} ETH on Robinhood Chain</span>}
           </div>
           <p className="note">
-            Deploying all six costs gas only (each is one transaction of about 1–4M gas). The SessionHook schedule admin becomes
-            the wallet that deploys it. That admin can only update DST and holiday times and fees, capped at 5%. The exact init code is
-            committed in the repo at <span className="mono">deployments/robinhood.json</span>, and the forge script deploys the same bytes.
+            Deploying all eight costs gas only (each is one transaction of about 1–4M gas). The wallet that deploys SessionHook becomes
+            its schedule admin (DST and holiday times, fees capped at 5%), and the wallet that deploys TideLauncher becomes the route admin
+            (which quote assets launches may migrate to). Neither can move anyone's funds. The exact init code is committed in the repo at{" "}
+            <span className="mono">deployments/robinhood.json</span>, and the forge script deploys the same bytes.
           </p>
         </div>
+        {done && <AdminPanel />}
       </div>
     </section>
+  );
+}
+
+/** Route admin: approve quote assets and the canonical v4 pools used to convert into them on migration. */
+function AdminPanel() {
+  const { session, toast } = useApp();
+  const [admin] = usePoll(() => client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "admin" }), 120_000, []);
+  const [quote, setQuote] = useState("");
+  const [c0, setC0] = useState("0x0000000000000000000000000000000000000000");
+  const [c1, setC1] = useState("");
+  const [fee, setFee] = useState("500");
+  const [spacing, setSpacing] = useState("10");
+  const [hooks, setHooks] = useState("0x0000000000000000000000000000000000000000");
+  const [busy, setBusy] = useState(false);
+  if (!session || !admin || session.account.toLowerCase() !== admin.toLowerCase()) return null;
+
+  async function call(fn: string, args: readonly unknown[], ok: string) {
+    if (!session) return;
+    setBusy(true);
+    try {
+      await sendTx(session, { address: ADDR.launcher, abi: tideLauncherAbi, functionName: fn, args });
+      toast(ok);
+    } catch (e) {
+      toast(errMsg(e), "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <div className="panel-head">
+        <span className="tag">Route admin</span>
+        <span className="pill tide">you are admin</span>
+      </div>
+      <p className="note" style={{ marginTop: 0 }}>
+        Pair changes are off until you approve a quote asset <b>and</b> register a deep v4 pool to convert through. Only add
+        established assets and deep pools: a migrating launch swaps its whole quote balance through that route.
+      </p>
+      <div className="row">
+        <div className="field" style={{ flex: "1 1 320px" }}>
+          <label>Quote asset</label>
+          <input className="input" placeholder="0x… (e.g. a USD stablecoin or tokenized stock)" value={quote} onChange={(e) => setQuote(e.target.value.trim())} />
+        </div>
+        <button className="btn primary" disabled={busy || !isAddress(quote)} onClick={() => call("setQuoteAllowed", [quote as Address, true], "Quote allowed.")}>
+          Allow
+        </button>
+        <button className="btn" disabled={busy || !isAddress(quote)} onClick={() => call("setQuoteAllowed", [quote as Address, false], "Quote disallowed.")}>
+          Disallow
+        </button>
+      </div>
+      <div className="subpanel">
+        <h3>Register route pool</h3>
+        <div className="row">
+          <div className="field">
+            <label>currency0</label>
+            <input className="input" value={c0} onChange={(e) => setC0(e.target.value.trim())} />
+          </div>
+          <div className="field">
+            <label>currency1</label>
+            <input className="input" value={c1} onChange={(e) => setC1(e.target.value.trim())} />
+          </div>
+        </div>
+        <div className="row">
+          <div className="field">
+            <label>Fee (pips)</label>
+            <input className="input" value={fee} onChange={(e) => setFee(e.target.value.replace(/\D/g, ""))} />
+          </div>
+          <div className="field">
+            <label>Tick spacing</label>
+            <input className="input" value={spacing} onChange={(e) => setSpacing(e.target.value.replace(/[^\d-]/g, ""))} />
+          </div>
+          <div className="field" style={{ flex: "2 1 280px" }}>
+            <label>Hooks</label>
+            <input className="input" value={hooks} onChange={(e) => setHooks(e.target.value.trim())} />
+          </div>
+        </div>
+        <button
+          className="btn primary"
+          disabled={busy || !isAddress(c0) || !isAddress(c1) || !isAddress(hooks) || !fee || !spacing}
+          onClick={() =>
+            call(
+              "setRoute",
+              [{ currency0: c0 as Address, currency1: c1 as Address, fee: Number(fee), tickSpacing: Number(spacing), hooks: hooks as Address }],
+              "Route registered.",
+            )
+          }
+        >
+          {busy ? <Spinner /> : "Register route"}
+        </button>
+      </div>
+    </div>
   );
 }

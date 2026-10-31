@@ -4,124 +4,70 @@ pragma solidity ^0.8.26;
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
+import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
-import {TideToken} from "./TideToken.sol";
+import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
+import {TideToken, TideTokenFactory} from "./TideToken.sol";
+import {TideLauncherBase} from "./TideLauncherBase.sol";
+import {TideMigrator} from "./TideMigrator.sol";
 import {CreatorBondHook} from "./CreatorBondHook.sol";
 
 /// @title TideLauncher
 /// @notice One transaction launches a token on Uniswap v4 behind a tidehook:
 ///         1. deploys a fixed-supply TideToken (1B, 18 decimals),
-///         2. initializes its pool against ETH or any ERC20 quote asset at the creator's start price,
-///         3. seeds the whole public supply as single-sided liquidity and locks it here forever,
+///         2. initializes its pool against ETH or any ERC20 at the creator's start price,
+///         3. seeds the whole public supply as single-sided liquidity reaching the v4 maximum price
+///            (no market-cap ceiling, no graduation step, nothing to get stuck on), held here forever,
 ///         4. bonds the creator's allocation in CreatorBondHook, or pays it out for other hooks.
-///         The locked position keeps earning swap fees; only the creator can collect them.
-contract TideLauncher is IUnlockCallback {
+///
+///         After launch the creator can:
+///         - collect the swap fees the locked liquidity earns,
+///         - rename the token (name, symbol, image, description), at most once per RENAME_COOLDOWN,
+///         - migrate the locked liquidity to a new pool with a different hook and/or pair. A v4 pool's
+///           hook and currencies are fixed in its PoolKey, so "upgrading" either means moving liquidity.
+///           Migration is announced on-chain and executable only after MIGRATION_DELAY, keeps the price,
+///           and may only switch to admin-allowlisted quote assets through admin-registered route pools.
+///           Bond launches can't migrate: their escrow is tied to the original pool's price.
+contract TideLauncher is TideLauncherBase, IUnlockCallback {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
     using SafeTransferLib for ERC20;
 
-    enum Kind {
-        Patience,
-        Spring,
-        Bond,
-        Session
+    TideTokenFactory public immutable tokenFactory;
+    TideMigrator public immutable migrator;
+
+    constructor(
+        IPoolManager _poolManager,
+        TideTokenFactory _factory,
+        TideMigrator _migrator,
+        address _patience,
+        address _spring,
+        address _bond,
+        address _session
+    ) TideLauncherBase(_poolManager, _patience, _spring, _bond, _session) {
+        tokenFactory = _factory;
+        migrator = _migrator;
+        // The deploying EOA administers routes; keeps the CREATE2 init code independent of who deploys.
+        admin = tx.origin;
+        quoteAllowed[address(0)] = true;
     }
-
-    enum Action {
-        Seed,
-        Collect
-    }
-
-    struct LaunchParams {
-        string name;
-        string symbol;
-        string imageURI;
-        string description;
-        Kind kind;
-        address quote; // address(0) = native ETH
-        // Prices are given as ticks *as if the quote were currency0 and the token currency1*
-        // (log1.0001 of raw tokens per raw quote). The launcher flips the sign when the token sorts first,
-        // so a frontend never has to predict the new token's address to get the price right.
-        int24 startTick; // launch price, multiple of TICK_SPACING
-        uint16 creatorBps; // share of supply for the creator, max MAX_CREATOR_BPS
-        int24 floorTick; // Bond only: price floor the creator promises (same orientation)
-        uint64 vestDuration; // Bond only
-        uint64 grace; // Bond only
-    }
-
-    struct Launch {
-        address token;
-        address creator;
-        Kind kind;
-        bool tokenIsCurrency0;
-        int24 tickLower;
-        int24 tickUpper;
-        uint64 createdAt;
-        uint64 createdBlock;
-        PoolKey key;
-        string name;
-        string symbol;
-        string imageURI;
-        string description;
-    }
-
-    event Launched(
-        uint256 indexed id,
-        address indexed token,
-        address indexed creator,
-        Kind kind,
-        PoolId poolId,
-        address quote,
-        int24 startTick,
-        uint256 creatorAmount
-    );
-    event FeesCollected(uint256 indexed id, uint256 amount0, uint256 amount1);
-
-    error NotPoolManager();
-    error NotCreator();
-    error UnknownLaunch();
-    error BadParams(string reason);
-
-    uint256 public constant SUPPLY = 1_000_000_000e18;
-    int24 public constant TICK_SPACING = 200;
-    uint24 public constant BOND_POOL_FEE = 10_000; // 1% static fee for Bond pools
-    uint16 public constant MAX_CREATOR_BPS = 2_000; // 20%
-    address public constant BURN = 0x000000000000000000000000000000000000dEaD;
-
-    IPoolManager public immutable poolManager;
-    address public immutable patienceHook;
-    address public immutable springHook;
-    address public immutable bondHook;
-    address public immutable sessionHook;
-
-    Launch[] internal _launches;
-    /// @notice token => launch id + 1 (0 = not a tidehook token)
-    mapping(address => uint256) public launchIdPlusOne;
-
-    constructor(IPoolManager _poolManager, address _patience, address _spring, address _bond, address _session) {
-        poolManager = _poolManager;
-        patienceHook = _patience;
-        springHook = _spring;
-        bondHook = _bond;
-        sessionHook = _session;
-    }
-
-    // ------------------------------------------------------------------ launch
 
     function launch(LaunchParams calldata p) external returns (uint256 id, address token) {
         _validate(p);
 
-        token = address(new TideToken(p.name, p.symbol, SUPPLY, address(this)));
+        token = tokenFactory.create(p.name, p.symbol, SUPPLY, address(this));
         id = _launches.length;
         Launch storage l = _launches.push();
         l.token = token;
@@ -152,15 +98,7 @@ contract TideLauncher is IUnlockCallback {
     function _openPool(Launch storage l, address quote, int24 startTick, uint256 amount, uint256 id) internal {
         bool tokenIs0 = l.token < quote;
         l.tokenIsCurrency0 = tokenIs0;
-        l.key = PoolKey({
-            currency0: Currency.wrap(tokenIs0 ? l.token : quote),
-            currency1: Currency.wrap(tokenIs0 ? quote : l.token),
-            fee: l.kind == Kind.Bond ? BOND_POOL_FEE : LPFeeLibrary.DYNAMIC_FEE_FLAG,
-            tickSpacing: TICK_SPACING,
-            hooks: IHooks(_hookFor(l.kind))
-        });
-
-        // The range holds only the token and starts exactly at the launch price.
+        l.key = _keyFor(l.token, quote, l.kind);
         (l.tickLower, l.tickUpper) = tokenIs0
             ? (startTick, TickMath.maxUsableTick(TICK_SPACING))
             : (TickMath.minUsableTick(TICK_SPACING), startTick);
@@ -183,63 +121,144 @@ contract TideLauncher is IUnlockCallback {
         }
     }
 
-    /// @notice Creator collects the swap fees earned by the locked launch liquidity.
+    /// @notice Creator collects the swap fees earned by the locked liquidity.
     function collectFees(uint256 id) external returns (uint256 amount0, uint256 amount1) {
-        Launch storage l = _get(id);
-        if (msg.sender != l.creator) revert NotCreator();
-        (amount0, amount1) = abi.decode(
-            poolManager.unlock(abi.encode(Action.Collect, abi.encode(l.key, l.tickLower, l.tickUpper, id, l.creator))),
-            (uint256, uint256)
-        );
+        _creatorOf(id);
+        (amount0, amount1) =
+            abi.decode(poolManager.unlock(abi.encode(Action.Collect, abi.encode(id))), (uint256, uint256));
         emit FeesCollected(id, amount0, amount1);
+    }
+
+    /// @notice Rename the token and update its listing. The ERC20 `name()`/`symbol()` change on-chain.
+    function updateMetadata(
+        uint256 id,
+        string calldata name,
+        string calldata symbol,
+        string calldata imageURI,
+        string calldata description
+    ) external {
+        Launch storage l = _creatorOf(id);
+        _validateMeta(name, symbol, imageURI, description);
+        if (l.renamedAt != 0 && block.timestamp < l.renamedAt + RENAME_COOLDOWN) {
+            revert RenameCooldown(l.renamedAt + RENAME_COOLDOWN);
+        }
+        l.renamedAt = uint64(block.timestamp);
+        l.name = name;
+        l.symbol = symbol;
+        l.imageURI = imageURI;
+        l.description = description;
+        TideToken(l.token).setMetadata(name, symbol);
+        emit MetadataUpdated(id, name, symbol, imageURI, description);
+    }
+
+    /// @notice Announce a move of the locked liquidity to a new hook and/or pair. Executable after the delay.
+    function proposeMigration(uint256 id, Kind kind, address quote) external {
+        Launch storage l = _creatorOf(id);
+        if (l.kind == Kind.Bond || kind == Kind.Bond) revert BadParams("bond");
+        address oldQuote = _quoteOf(l);
+        if (kind == l.kind && quote == oldQuote) revert BadParams("same pool");
+        if (quote == l.token) revert BadParams("quote");
+
+        int24 routeTick;
+        PoolId routeId;
+        if (quote != oldQuote) {
+            if (!quoteAllowed[quote]) revert BadParams("quote not allowed");
+            routeTick = _routeRate(oldQuote, quote);
+            routeId = _routes[_pairKey(oldQuote, quote)].toId();
+        }
+        uint64 readyAt = uint64(block.timestamp + MIGRATION_DELAY);
+        pendingMigration[id] =
+            Migration({kind: kind, quote: quote, readyAt: readyAt, routeTick: routeTick, routeId: routeId});
+        emit MigrationProposed(id, kind, quote, readyAt);
+    }
+
+    function cancelMigration(uint256 id) external {
+        _creatorOf(id);
+        if (pendingMigration[id].readyAt == 0) revert NoMigration();
+        delete pendingMigration[id];
+        emit MigrationCancelled(id);
+    }
+
+    /// @param minQuoteOut Floor on the new quote asset received when converting the pool's old quote holdings.
+    function executeMigration(uint256 id, uint256 minQuoteOut) external {
+        _creatorOf(id);
+        Migration memory m = pendingMigration[id];
+        if (m.readyAt == 0) revert NoMigration();
+        if (block.timestamp < m.readyAt) revert MigrationNotReady(m.readyAt);
+        if (block.timestamp > m.readyAt + MIGRATION_WINDOW) revert MigrationExpired();
+        delete pendingMigration[id];
+        poolManager.unlock(abi.encode(Action.Migrate, abi.encode(id, m, minQuoteOut)));
+    }
+
+    function setQuoteAllowed(address quote, bool allowed) external {
+        if (msg.sender != admin) revert NotAdmin();
+        quoteAllowed[quote] = allowed;
+        emit QuoteAllowed(quote, allowed);
+    }
+
+    /// @notice Register the canonical v4 pool used to convert between its two currencies during migrations.
+    function setRoute(PoolKey calldata key) external {
+        if (msg.sender != admin) revert NotAdmin();
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
+        if (sqrtPriceX96 == 0) revert BadParams("route not initialized");
+        _routes[_pairKey(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1))] = key;
+        emit RouteSet(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1), key.toId());
+    }
+
+    function setAdmin(address newAdmin) external {
+        if (msg.sender != admin) revert NotAdmin();
+        admin = newAdmin;
+        emit AdminSet(newAdmin);
     }
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
         (Action action, bytes memory inner) = abi.decode(data, (Action, bytes));
-        return action == Action.Seed ? _seed(inner) : _collect(inner);
+        if (action == Action.Seed) return _seed(inner);
+        if (action == Action.Collect) return _collect(abi.decode(inner, (uint256)));
+        (uint256 id, Migration memory m, uint256 minQuoteOut) = abi.decode(inner, (uint256, Migration, uint256));
+        (bool ok, bytes memory ret) =
+            address(migrator).delegatecall(abi.encodeCall(TideMigrator.migrate, (id, m, minQuoteOut)));
+        if (!ok) {
+            assembly ("memory-safe") {
+                revert(add(ret, 32), mload(ret))
+            }
+        }
+        return "";
     }
 
     function _seed(bytes memory inner) internal returns (bytes memory) {
         (PoolKey memory key, int24 lower, int24 upper, uint256 amount, bool tokenIs0, uint256 id) =
             abi.decode(inner, (PoolKey, int24, int24, uint256, bool, uint256));
-        uint160 sqrtLower = TickMath.getSqrtPriceAtTick(lower);
-        uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(upper);
-        uint128 liquidity = tokenIs0
-            ? LiquidityAmounts.getLiquidityForAmount0(sqrtLower, sqrtUpper, amount)
-            : LiquidityAmounts.getLiquidityForAmount1(sqrtLower, sqrtUpper, amount);
-        if (liquidity == 0) revert BadParams("liquidity");
-
-        (BalanceDelta delta,) = poolManager.modifyLiquidity(
-            key,
-            ModifyLiquidityParams({
-                tickLower: lower, tickUpper: upper, liquidityDelta: int256(uint256(liquidity)), salt: bytes32(id)
-            }),
-            ""
-        );
-
+        uint256 owed = _addLiquidity(key, lower, upper, amount, tokenIs0, _saltA(id));
+        if (owed == 0) revert BadParams("liquidity");
         Currency token = tokenIs0 ? key.currency0 : key.currency1;
-        int128 owed = tokenIs0 ? delta.amount0() : delta.amount1();
         poolManager.sync(token);
-        ERC20(Currency.unwrap(token)).safeTransfer(address(poolManager), uint256(uint128(-owed)));
+        ERC20(Currency.unwrap(token)).safeTransfer(address(poolManager), owed);
         poolManager.settle();
         return "";
     }
 
-    function _collect(bytes memory inner) internal returns (bytes memory) {
-        (PoolKey memory key, int24 lower, int24 upper, uint256 id, address to) =
-            abi.decode(inner, (PoolKey, int24, int24, uint256, address));
-        (BalanceDelta delta,) = poolManager.modifyLiquidity(
-            key, ModifyLiquidityParams({tickLower: lower, tickUpper: upper, liquidityDelta: 0, salt: bytes32(id)}), ""
-        );
-        uint256 a0 = delta.amount0() > 0 ? uint256(uint128(delta.amount0())) : 0;
-        uint256 a1 = delta.amount1() > 0 ? uint256(uint128(delta.amount1())) : 0;
-        if (a0 > 0) poolManager.take(key.currency0, to, a0);
-        if (a1 > 0) poolManager.take(key.currency1, to, a1);
+    function _collect(uint256 id) internal returns (bytes memory) {
+        Launch storage l = _launches[id];
+        PoolKey memory key = l.key;
+        (uint256 a0, uint256 a1) = _poke(key, l.tickLower, l.tickUpper, _saltA(id));
+        if (l.bidLower != l.bidUpper) {
+            (uint256 b0, uint256 b1) = _poke(key, l.bidLower, l.bidUpper, _saltB(id));
+            a0 += b0;
+            a1 += b1;
+        }
+        if (a0 > 0) poolManager.take(key.currency0, l.creator, a0);
+        if (a1 > 0) poolManager.take(key.currency1, l.creator, a1);
         return abi.encode(a0, a1);
     }
 
-    // ------------------------------------------------------------------ views
+    function _poke(PoolKey memory key, int24 lower, int24 upper, bytes32 salt) internal returns (uint256, uint256) {
+        (BalanceDelta d,) = poolManager.modifyLiquidity(
+            key, ModifyLiquidityParams({tickLower: lower, tickUpper: upper, liquidityDelta: 0, salt: salt}), ""
+        );
+        return (_pos(d.amount0()), _pos(d.amount1()));
+    }
 
     function launchCount() external view returns (uint256) {
         return _launches.length;
@@ -272,26 +291,22 @@ contract TideLauncher is IUnlockCallback {
         return _get(id).key.toId();
     }
 
-    // ------------------------------------------------------------------ internal
-
-    function _get(uint256 id) internal view returns (Launch storage) {
-        if (id >= _launches.length) revert UnknownLaunch();
-        return _launches[id];
+    /// @notice Pools this launch has migrated away from, oldest first.
+    function pastPools(uint256 id) external view returns (PoolId[] memory) {
+        return _pastPools[id];
     }
 
-    function _hookFor(Kind k) internal view returns (address) {
-        if (k == Kind.Patience) return patienceHook;
-        if (k == Kind.Spring) return springHook;
-        if (k == Kind.Bond) return bondHook;
-        return sessionHook;
+    function routeFor(address a, address b) external view returns (PoolKey memory) {
+        return _routes[_pairKey(a, b)];
+    }
+
+    function _creatorOf(uint256 id) internal view returns (Launch storage l) {
+        l = _get(id);
+        if (msg.sender != l.creator) revert NotCreator();
     }
 
     function _validate(LaunchParams calldata p) internal pure {
-        uint256 nl = bytes(p.name).length;
-        uint256 sl = bytes(p.symbol).length;
-        if (nl == 0 || nl > 32) revert BadParams("name");
-        if (sl == 0 || sl > 12) revert BadParams("symbol");
-        if (bytes(p.imageURI).length > 256 || bytes(p.description).length > 512) revert BadParams("metadata");
+        _validateMeta(p.name, p.symbol, p.imageURI, p.description);
         if (p.creatorBps > MAX_CREATOR_BPS) revert BadParams("creatorBps");
         if (p.startTick % TICK_SPACING != 0) revert BadParams("startTick");
         if (p.startTick <= TickMath.minUsableTick(TICK_SPACING) || p.startTick >= TickMath.maxUsableTick(TICK_SPACING))
@@ -299,5 +314,18 @@ contract TideLauncher is IUnlockCallback {
             revert BadParams("startTick");
         }
         if (p.kind == Kind.Bond && (p.creatorBps == 0 || p.vestDuration == 0)) revert BadParams("bond");
+    }
+
+    function _validateMeta(
+        string calldata name,
+        string calldata symbol,
+        string calldata imageURI,
+        string calldata description
+    ) internal pure {
+        uint256 nl = bytes(name).length;
+        uint256 sl = bytes(symbol).length;
+        if (nl == 0 || nl > 32) revert BadParams("name");
+        if (sl == 0 || sl > 12) revert BadParams("symbol");
+        if (bytes(imageURI).length > 256 || bytes(description).length > 512) revert BadParams("metadata");
     }
 }

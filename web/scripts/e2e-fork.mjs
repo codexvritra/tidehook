@@ -132,7 +132,27 @@ console.log("3. Patience slow lane: commit, wait, reveal through the router");
   ok(slowOut > fastOut, `slow lane got ${((Number(slowOut - fastOut) / Number(fastOut)) * 100).toFixed(2)}% more tokens than fast lane`);
 }
 
-console.log("4. Listing reads (what Explore shows)");
+console.log("4. Rename and hook upgrade after launch");
+{
+  const { id, token } = await launch(0, 500);
+  const swap = { key: (await pub.readContract({ ...L, functionName: "getLaunch", args: [id] })).key, zeroForOne: true, amountIn: parseEther("1"), minOut: 0n, sqrtPriceLimitX96: MIN, hookData: "0x" };
+  await write({ ...R, functionName: "swapExactIn", args: [swap, account.address, 2n ** 40n], value: parseEther("1") });
+
+  await write({ ...L, functionName: "updateMetadata", args: [id, "Renamed Fork", "RNFK", "", "renamed on the fork"] });
+  ok((await pub.readContract({ address: token, abi: ERC, functionName: "symbol" })) === "RNFK", "ERC20 symbol changed on-chain after rename");
+
+  await write({ ...L, functionName: "proposeMigration", args: [id, 1, "0x0000000000000000000000000000000000000000"] });
+  await warp(86_400 + 5);
+  await write({ ...L, functionName: "executeMigration", args: [id, 0n] });
+  const after = await pub.readContract({ ...L, functionName: "getLaunch", args: [id] });
+  ok(after.key.hooks.toLowerCase() === A.SpringHook.toLowerCase() && after.migrations === 1, "liquidity migrated to the Spring hook");
+  const b0 = await pub.readContract({ address: token, abi: ERC, functionName: "balanceOf", args: [account.address] });
+  await write({ ...R, functionName: "swapExactIn", args: [{ ...swap, key: after.key }, account.address, 2n ** 40n], value: parseEther("1") });
+  const b1 = await pub.readContract({ address: token, abi: ERC, functionName: "balanceOf", args: [account.address] });
+  ok(b1 > b0, "trading works on the upgraded pool");
+}
+
+console.log("5. Listing reads (what Explore shows)");
 const [page] = await pub.readContract({ ...L, functionName: "getLaunches", args: [0n, 50n] });
 ok(page.length >= 5, `getLaunches returns ${page.length} launches newest-first`);
 console.log("\nE2E PASSED");

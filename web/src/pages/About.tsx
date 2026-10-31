@@ -70,6 +70,9 @@ export function About() {
               <li>Adds every public token as single-sided liquidity, held by the launcher forever. It can never be removed.</li>
               <li>Bonds the creator's share in CreatorBondHook (Bond pools), or sends it to the creator.</li>
               <li>The locked position earns every swap fee. Only the creator can collect them.</li>
+              <li>No cap and no graduation: liquidity reaches the v4 maximum price from block one, so a coin never gets stuck waiting to "migrate".</li>
+              <li>Rename: the creator can change name, symbol, image and description. The ERC20 itself changes, at most once per 24h, with every rename logged.</li>
+              <li>Upgrade the hook or change the pair: a v4 pool's hook and currencies are fixed, so the launcher moves all locked liquidity into a new pool at the same price. It's announced 24h ahead. Pairs are limited to admin-approved assets and deep route pools, with a 5% price-sanity bound. Bond launches can't migrate.</li>
             </ol>
             <p className="note">
               Uniswap v4 PoolManager:{" "}

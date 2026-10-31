@@ -3,7 +3,7 @@ import { formatUnits } from "viem";
 import { tideLauncherAbi } from "../lib/abis";
 import { useApp } from "../lib/appContext";
 import { ADDR, client, explorer, explorerTx } from "../lib/chain";
-import { KINDS, KIND_BLURB, balanceOf, readAsset, readLaunch, readTrades, usePoll, type Asset } from "../lib/data";
+import { KINDS, KIND_BLURB, balanceOf, readAsset, readLaunch, readPending, readRenames, readTrades, usePoll, type Asset } from "../lib/data";
 import { short } from "../lib/format";
 import { poolIdOf } from "../lib/pool";
 import { fmtNum, marketCap, priceAtTick, tokenPrice } from "../lib/price";
@@ -12,6 +12,7 @@ import { Avatar, KindBadge, Price, Spinner } from "../components/bits";
 import { PriceChart } from "../components/Chart";
 import { BondPanel, PatiencePanel, SessionPanel, SpringPanel } from "../components/HookPanels";
 import { Swap } from "../components/Swap";
+import { ManagePanel, PendingBanner } from "../components/Manage";
 import { Copy } from "../components/ui";
 
 export function TokenPage({ id }: { id: number }) {
@@ -22,7 +23,7 @@ export function TokenPage({ id }: { id: number }) {
     if (launch) readAsset(launch.quote).then(setAsset).catch(() => setAsset(undefined));
   }, [launch?.quote]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const poolId = useMemo(() => (launch ? poolIdOf(launch.key) : undefined), [launch?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const poolId = useMemo(() => (launch ? poolIdOf(launch.key) : undefined), [launch?.id, launch?.migrations]); // eslint-disable-line react-hooks/exhaustive-deps
   const [trades, , reloadTrades] = usePoll(
     () => (launch && poolId ? readTrades(poolId, launch.createdBlock, launch.tokenIsCurrency0) : Promise.resolve([])),
     15_000,
@@ -42,6 +43,12 @@ export function TokenPage({ id }: { id: number }) {
   );
   const [collecting, setCollecting] = useState(false);
   const [tab, setTab] = useState<"trades" | "hook">("trades");
+  const [pending, , reloadPending] = usePoll(() => readPending(id), 20_000, [id, deploy?.ready]);
+  const [renames] = usePoll(() => (launch ? readRenames(id, launch.createdBlock) : Promise.resolve([])), 60_000, [id, launch?.renamedAt]);
+  const [pendingQuote, setPendingQuote] = useState("…");
+  useEffect(() => {
+    if (pending) readAsset(pending.quote).then((a) => setPendingQuote(a.symbol)).catch(() => setPendingQuote("?"));
+  }, [pending?.quote]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (err && !launch)
     return (
@@ -78,6 +85,7 @@ export function TokenPage({ id }: { id: number }) {
     reloadTrades();
     reloadBal();
     reloadFees();
+    reloadPending();
   };
 
   async function collect() {
@@ -100,12 +108,19 @@ export function TokenPage({ id }: { id: number }) {
 
   return (
     <div className="terminal">
+      <PendingBanner pending={pending ?? null} quoteSymbol={pendingQuote} />
       <div className="tbar">
         <div className="tbar-id">
           <Avatar src={l.imageURI} label={l.symbol} size={46} />
           <div style={{ minWidth: 0 }}>
             <h2>
               ${l.symbol} <span>{l.name}</span> <KindBadge kind={l.kind} />
+              {renames && renames.length > 0 && (
+                <span className="pill moon" title={`Rename history: ${renames.map((r) => `$${r.symbol} (${r.name})`).join(" → ")}`}>
+                  Renamed ×{renames.length}
+                </span>
+              )}
+              {l.migrations > 0 && <span className="pill tide">Migrated ×{l.migrations}</span>}
             </h2>
             <div className="tbar-meta">
               <span>
@@ -129,7 +144,7 @@ export function TokenPage({ id }: { id: number }) {
           </b>
           <span className={change > 0.005 ? "up" : change < -0.005 ? "down" : "dim"}>
             {change > 0.005 ? "+" : ""}
-            {Math.abs(change) < 0.005 ? "0.00" : change.toFixed(2)}% since launch
+            {Math.abs(change) < 0.005 ? "0.00" : change.toFixed(2)}% since {l.migrations > 0 ? "migration" : "launch"}
           </span>
         </div>
         <div className="tbar-stats">
@@ -241,6 +256,8 @@ export function TokenPage({ id }: { id: number }) {
 
         <aside className="tside">
           <Swap launch={l} asset={asset} poolId={poolId} onTraded={refresh} />
+
+          {isCreator && <ManagePanel launch={l} pending={pending ?? null} onChanged={refresh} />}
 
           {isCreator && (
             <div className="panel">

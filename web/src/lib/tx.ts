@@ -87,3 +87,9 @@ export async function sendRaw(session: Session, to: Address, data: Hex): Promise
   if (receipt.status !== "success") throw new Error(`Transaction reverted: ${hash}`);
   return receipt;
 }
+
+/** Swap deadline from the chain's clock (the router checks block.timestamp), 10 minutes out. */
+export async function chainDeadline(seconds = 600): Promise<bigint> {
+  const b = await client.getBlock();
+  return b.timestamp + BigInt(seconds);
+}

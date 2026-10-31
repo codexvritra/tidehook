@@ -13,6 +13,10 @@ export type Launch = {
   tokenIsCurrency0: boolean;
   tickLower: number;
   tickUpper: number;
+  bidLower: number;
+  bidUpper: number;
+  migrations: number;
+  renamedAt: number;
   createdAt: number;
   createdBlock: bigint;
   key: PoolKey;
@@ -78,6 +82,10 @@ type RawLaunch = {
   tokenIsCurrency0: boolean;
   tickLower: number;
   tickUpper: number;
+  bidLower: number;
+  bidUpper: number;
+  migrations: number;
+  renamedAt: bigint;
   createdAt: bigint;
   createdBlock: bigint;
   key: PoolKey;
@@ -95,6 +103,10 @@ function toLaunch(id: number, l: RawLaunch, sqrtPriceX96: bigint, tick: number):
     createdAt: Number(l.createdAt),
     tickLower: Number(l.tickLower),
     tickUpper: Number(l.tickUpper),
+    bidLower: Number(l.bidLower),
+    bidUpper: Number(l.bidUpper),
+    migrations: Number(l.migrations),
+    renamedAt: Number(l.renamedAt),
     key: { ...l.key, fee: Number(l.key.fee), tickSpacing: Number(l.key.tickSpacing) },
     sqrtPriceX96,
     tick: Number(tick),
@@ -187,4 +199,35 @@ export async function readTrades(poolId: Hex, fromBlock: bigint, tokenIsCurrency
       fee: Number(l.args.fee),
     };
   });
+}
+
+// ------------------------------------------------------------------ creator controls
+
+export type Pending = { kind: number; quote: Address; readyAt: number } | null;
+
+export async function readPending(id: number): Promise<Pending> {
+  const [kind, quote, readyAt] = (await client.readContract({
+    address: ADDR.launcher,
+    abi: tideLauncherAbi,
+    functionName: "pendingMigration",
+    args: [BigInt(id)],
+  })) as unknown as [number, Address, bigint, number, Hex];
+  return readyAt === 0n ? null : { kind: Number(kind), quote, readyAt: Number(readyAt) };
+}
+
+const RENAMED = parseAbiItem("event MetadataUpdated(uint256 indexed id, string name, string symbol, string imageURI, string description)");
+const QUOTE_ALLOWED = parseAbiItem("event QuoteAllowed(address indexed quote, bool allowed)");
+
+/** Every rename of a launch, oldest first (from MetadataUpdated events). */
+export async function readRenames(id: number, fromBlock: bigint): Promise<{ name: string; symbol: string; block: bigint }[]> {
+  const logs = await client.getLogs({ address: ADDR.launcher, event: RENAMED, args: { id: BigInt(id) }, fromBlock, toBlock: "latest" });
+  return logs.map((l) => ({ name: l.args.name!, symbol: l.args.symbol!, block: l.blockNumber! }));
+}
+
+/** Quote assets the admin currently allows migrations to (ETH is always allowed). */
+export async function readAllowedQuotes(): Promise<Address[]> {
+  const logs = await client.getLogs({ address: ADDR.launcher, event: QUOTE_ALLOWED, fromBlock: 0n, toBlock: "latest" });
+  const state = new Map<string, boolean>();
+  for (const l of logs) state.set(l.args.quote!.toLowerCase(), l.args.allowed!);
+  return [ETH, ...[...state].filter(([, ok]) => ok).map(([a]) => a as Address)];
 }

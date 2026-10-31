@@ -19,7 +19,10 @@ import {SpringHook} from "../src/SpringHook.sol";
 import {CreatorBondHook} from "../src/CreatorBondHook.sol";
 import {SessionHook} from "../src/SessionHook.sol";
 import {TideLauncher} from "../src/TideLauncher.sol";
+import {TideLauncherBase} from "../src/TideLauncherBase.sol";
 import {TideRouter} from "../src/TideRouter.sol";
+import {TideTokenFactory} from "../src/TideToken.sol";
+import {TideMigrator} from "../src/TideMigrator.sol";
 
 /// @notice Shared setup: all four hooks at flag-correct addresses, plus launcher and router.
 abstract contract TideStack is Test, Deployers {
@@ -61,16 +64,16 @@ abstract contract TideStack is Test, Deployers {
         spring = SpringHook(s);
         bondHook = CreatorBondHook(b);
         session = SessionHook(c);
-        launcher = new TideLauncher(pm, p, s, b, c);
+        launcher = new TideLauncher(pm, new TideTokenFactory(), new TideMigrator(pm, p, s, b, c), p, s, b, c);
         router = new TideRouter(pm);
     }
 
-    function _params(TideLauncher.Kind kind, address quote, int24 startTick, uint16 bps)
+    function _params(TideLauncherBase.Kind kind, address quote, int24 startTick, uint16 bps)
         internal
         pure
-        returns (TideLauncher.LaunchParams memory)
+        returns (TideLauncherBase.LaunchParams memory)
     {
-        return TideLauncher.LaunchParams({
+        return TideLauncherBase.LaunchParams({
             name: "Tide Test",
             symbol: "TIDE",
             imageURI: "https://example.com/tide.png",
@@ -109,8 +112,9 @@ contract LaunchTest is TideStack {
     }
 
     function test_launch_seedsLockedSingleSidedLiquidity() public {
-        (uint256 id, address token) = launcher.launch(_params(TideLauncher.Kind.Patience, address(0), ETH_START, 500));
-        TideLauncher.Launch memory l = launcher.getLaunch(id);
+        (uint256 id, address token) =
+            launcher.launch(_params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 500));
+        TideLauncherBase.Launch memory l = launcher.getLaunch(id);
         assertEq(l.token, token);
         assertEq(l.creator, address(this));
         assertFalse(l.tokenIsCurrency0, "ETH is always currency0");
@@ -127,7 +131,7 @@ contract LaunchTest is TideStack {
     }
 
     function test_router_quoteMatchesSwap_buyAndSell() public {
-        (uint256 id, address token) = launcher.launch(_params(TideLauncher.Kind.Spring, address(0), ETH_START, 0));
+        (uint256 id, address token) = launcher.launch(_params(TideLauncherBase.Kind.Spring, address(0), ETH_START, 0));
         PoolKey memory k = launcher.getLaunch(id).key;
 
         TideRouter.Swap memory s = TideRouter.Swap(k, true, 0.5 ether, 0, 0, "");
@@ -146,7 +150,7 @@ contract LaunchTest is TideStack {
     }
 
     function test_router_refundsExcessEth_andGuards() public {
-        (uint256 id,) = launcher.launch(_params(TideLauncher.Kind.Spring, address(0), ETH_START, 0));
+        (uint256 id,) = launcher.launch(_params(TideLauncherBase.Kind.Spring, address(0), ETH_START, 0));
         PoolKey memory k = launcher.getLaunch(id).key;
 
         uint256 before = address(this).balance;
@@ -170,7 +174,7 @@ contract LaunchTest is TideStack {
     }
 
     function test_patience_slowLaneThroughRouterPaysLess() public {
-        (uint256 id,) = launcher.launch(_params(TideLauncher.Kind.Patience, address(0), ETH_START, 0));
+        (uint256 id,) = launcher.launch(_params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 0));
         PoolKey memory k = launcher.getLaunch(id).key;
         uint128 amount = 1 ether;
         bytes32 salt = keccak256("patient");
@@ -189,8 +193,8 @@ contract LaunchTest is TideStack {
     function test_bond_creatorAllocationEscrowed_claimAfterFloorHolds() public {
         address creator = address(0xC0FFEE);
         vm.prank(creator);
-        (uint256 id, address token) = launcher.launch(_params(TideLauncher.Kind.Bond, address(0), ETH_START, 1_000));
-        TideLauncher.Launch memory l = launcher.getLaunch(id);
+        (uint256 id, address token) = launcher.launch(_params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 1_000));
+        TideLauncherBase.Launch memory l = launcher.getLaunch(id);
         PoolId pid = l.key.toId();
 
         address bonded = bondHook.getBond(pid).creator;
@@ -209,8 +213,8 @@ contract LaunchTest is TideStack {
     }
 
     function test_bond_launchedUnderFloor_cannotBeSlashedUntilArmed() public {
-        (uint256 id,) = launcher.launch(_params(TideLauncher.Kind.Bond, address(0), ETH_START, 1_000));
-        TideLauncher.Launch memory l = launcher.getLaunch(id);
+        (uint256 id,) = launcher.launch(_params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 1_000));
+        TideLauncherBase.Launch memory l = launcher.getLaunch(id);
         PoolId pid = l.key.toId();
 
         // No trading for a week: below the 2x floor the whole time, but never armed.
@@ -233,13 +237,13 @@ contract LaunchTest is TideStack {
         address creator = address(0xFEE5);
         vm.deal(creator, 0);
         vm.prank(creator);
-        (uint256 id, address token) = launcher.launch(_params(TideLauncher.Kind.Bond, address(0), ETH_START, 500));
+        (uint256 id, address token) = launcher.launch(_params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 500));
         PoolKey memory k = launcher.getLaunch(id).key;
 
         uint256 bought = _buy(k, 5 ether, "");
         _sell(k, token, uint128(bought / 2));
 
-        vm.expectRevert(TideLauncher.NotCreator.selector);
+        vm.expectRevert(TideLauncherBase.NotCreator.selector);
         launcher.collectFees(id);
 
         vm.prank(creator);
@@ -257,11 +261,12 @@ contract LaunchTest is TideStack {
 
         // Launch twice so both token/quote orderings are exercised whatever the addresses.
         for (uint256 i; i < 2; ++i) {
-            address predicted = vm.computeCreateAddress(address(launcher), vm.getNonce(address(launcher)));
+            address factory = address(launcher.tokenFactory());
+            address predicted = vm.computeCreateAddress(factory, vm.getNonce(factory));
             bool tokenIs0 = predicted < address(stock);
             (uint256 id, address token) =
-                launcher.launch(_params(TideLauncher.Kind.Session, address(stock), ETH_START, 0));
-            TideLauncher.Launch memory l = launcher.getLaunch(id);
+                launcher.launch(_params(TideLauncherBase.Kind.Session, address(stock), ETH_START, 0));
+            TideLauncherBase.Launch memory l = launcher.getLaunch(id);
             assertEq(token, predicted);
             assertEq(l.tokenIsCurrency0, tokenIs0);
             // The caller passed one orientation; the pool tick is flipped when the token sorts first.
@@ -278,32 +283,32 @@ contract LaunchTest is TideStack {
     }
 
     function test_getLaunches_newestFirstWithPrices() public {
-        launcher.launch(_params(TideLauncher.Kind.Patience, address(0), ETH_START, 0));
-        launcher.launch(_params(TideLauncher.Kind.Spring, address(0), ETH_START + 200, 0));
-        (TideLauncher.Launch[] memory page,, int24[] memory ticks) = launcher.getLaunches(0, 10);
+        launcher.launch(_params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 0));
+        launcher.launch(_params(TideLauncherBase.Kind.Spring, address(0), ETH_START + 200, 0));
+        (TideLauncherBase.Launch[] memory page,, int24[] memory ticks) = launcher.getLaunches(0, 10);
         assertEq(page.length, 2);
-        assertEq(uint8(page[0].kind), uint8(TideLauncher.Kind.Spring));
+        assertEq(uint8(page[0].kind), uint8(TideLauncherBase.Kind.Spring));
         assertEq(ticks[0], ETH_START + 200);
         (page,,) = launcher.getLaunches(5, 10);
         assertEq(page.length, 0);
     }
 
     function test_validation() public {
-        TideLauncher.LaunchParams memory p = _params(TideLauncher.Kind.Patience, address(0), ETH_START + 1, 0);
-        vm.expectRevert(abi.encodeWithSelector(TideLauncher.BadParams.selector, "startTick"));
+        TideLauncherBase.LaunchParams memory p = _params(TideLauncherBase.Kind.Patience, address(0), ETH_START + 1, 0);
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "startTick"));
         launcher.launch(p);
 
-        p = _params(TideLauncher.Kind.Patience, address(0), ETH_START, 2_001);
-        vm.expectRevert(abi.encodeWithSelector(TideLauncher.BadParams.selector, "creatorBps"));
+        p = _params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 2_001);
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "creatorBps"));
         launcher.launch(p);
 
-        p = _params(TideLauncher.Kind.Bond, address(0), ETH_START, 0);
-        vm.expectRevert(abi.encodeWithSelector(TideLauncher.BadParams.selector, "bond"));
+        p = _params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 0);
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "bond"));
         launcher.launch(p);
 
-        p = _params(TideLauncher.Kind.Patience, address(0), ETH_START, 0);
+        p = _params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 0);
         p.name = "";
-        vm.expectRevert(abi.encodeWithSelector(TideLauncher.BadParams.selector, "name"));
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "name"));
         launcher.launch(p);
     }
 }

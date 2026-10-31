@@ -6,7 +6,7 @@ import { ADDR, ETH, client } from "../lib/chain";
 import { balanceOf, usePoll, type Asset, type Launch } from "../lib/data";
 import { commitmentOf, loadCommits, newSalt, saveCommits } from "../lib/pool";
 import { buyIsZeroForOne, fmtNum, limitFor, tokenPrice } from "../lib/price";
-import { errMsg, sendTx } from "../lib/tx";
+import { chainDeadline, errMsg, sendTx } from "../lib/tx";
 import { Spinner } from "./bits";
 
 type Props = { launch: Launch; asset: Asset; poolId: Hex; onTraded: () => void };
@@ -136,7 +136,7 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
         address: ADDR.router,
         abi: tideRouterAbi,
         functionName: "swapExactIn",
-        args: [{ key: l.key, zeroForOne, amountIn, minOut, sqrtPriceLimitX96: limit, hookData: "0x" }, s.account, BigInt(Math.floor(Date.now() / 1000) + 600)],
+        args: [{ key: l.key, zeroForOne, amountIn, minOut, sqrtPriceLimitX96: limit, hookData: "0x" }, s.account, await chainDeadline()],
         value: inAsset === ETH ? amountIn : 0n,
       });
       toast(`Swapped ${fmtNum(Number(formatUnits(quote.amountIn, inDecimals)))} ${inSymbol} for ${fmtNum(Number(formatUnits(quote.out, outDecimals)))} ${outSymbol}.`);

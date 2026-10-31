@@ -18,10 +18,12 @@ const FLAG = {
   afterSwap: 1 << 6,
 };
 
+const FILE = { TideTokenFactory: "TideToken" };
 const artifact = (name) =>
-  JSON.parse(readFileSync(new URL(`../../out/${name}.sol/${name}.json`, import.meta.url))).bytecode.object;
+  JSON.parse(readFileSync(new URL(`../../out/${FILE[name] ?? name}.sol/${name}.json`, import.meta.url))).bytecode.object;
 
 function initCode(name, types, values) {
+  if (types.length === 0) return artifact(name);
   return concat([artifact(name), encodeAbiParameters(types.map((type) => ({ type })), values)]);
 }
 
@@ -67,9 +69,18 @@ const session = add(
   initCode("SessionHook", ["address", "address"], [POOL_MANAGER, ZERO]),
   FLAG.beforeInitialize | FLAG.beforeSwap,
 );
+const factory = add("TideTokenFactory", initCode("TideTokenFactory", [], []));
+const migrator = add(
+  "TideMigrator",
+  initCode("TideMigrator", ["address", "address", "address", "address", "address"], [POOL_MANAGER, patience, spring, bond, session]),
+);
 const launcher = add(
   "TideLauncher",
-  initCode("TideLauncher", ["address", "address", "address", "address", "address"], [POOL_MANAGER, patience, spring, bond, session]),
+  initCode(
+    "TideLauncher",
+    ["address", "address", "address", "address", "address", "address", "address"],
+    [POOL_MANAGER, factory, migrator, patience, spring, bond, session],
+  ),
 );
 const router = add("TideRouter", initCode("TideRouter", ["address"], [POOL_MANAGER]));
 
@@ -105,6 +116,8 @@ export const ADDR = {
   spring: "${spring}",
   bond: "${bond}",
   session: "${session}",
+  factory: "${factory}",
+  migrator: "${migrator}",
   launcher: "${launcher}",
   router: "${router}",
 } as const satisfies Record<string, Address>;

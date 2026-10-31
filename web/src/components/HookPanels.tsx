@@ -7,8 +7,8 @@ import { usePoll, type Asset, type Launch } from "../lib/data";
 import { fmtDuration } from "../lib/format";
 import { loadCommits, onCommitsChange, saltHookData, saveCommits, type SavedCommit } from "../lib/pool";
 import { fmtNum, priceAtTick, tokenPrice } from "../lib/price";
-import { errMsg, sendTx } from "../lib/tx";
-import { useNow } from "../lib/wallet";
+import { chainDeadline, errMsg, sendTx } from "../lib/tx";
+import { useChainNow } from "../lib/wallet";
 import { Price, Spinner } from "./bits";
 
 type P = { launch: Launch; asset: Asset; poolId: Hex; onChanged: () => void };
@@ -18,7 +18,7 @@ const pct = (pips: number) => `${(pips / 10_000).toFixed(pips % 100 === 0 ? 2 : 
 
 export function PatiencePanel({ launch: l, asset, poolId, onChanged }: P) {
   const { session, requireWallet, toast } = useApp();
-  const now = useNow(1000);
+  const now = useChainNow(1000);
   const [commits, setCommits] = useState<SavedCommit[]>(() => loadCommits(l.id));
 
   const mine = commits.filter((c) => !session || c.account.toLowerCase() === session.account.toLowerCase());
@@ -66,7 +66,7 @@ export function PatiencePanel({ launch: l, asset, poolId, onChanged }: P) {
         address: ADDR.router,
         abi: tideRouterAbi,
         functionName: "swapExactIn",
-        args: [{ ...swap, minOut }, s.account, BigInt(Math.floor(Date.now() / 1000) + 600)],
+        args: [{ ...swap, minOut }, s.account, await chainDeadline()],
         value: inAsset === ETH ? amountIn : 0n,
       });
       saveCommits(l.id, loadCommits(l.id).filter((x) => x.commitment !== c.commitment));
@@ -206,7 +206,7 @@ export function BondPanel({ launch: l, asset, poolId, onChanged }: P) {
     [poolId],
   );
   const [busy, setBusy] = useState<string | null>(null);
-  const now = useNow(5000);
+  const now = useChainNow(5000);
 
   if (!d) return <div className="panel"><p className="muted">Reading the bond…</p></div>;
   const { creator, slashed, floorTick, start, vestDuration, grace, isBelow, armed, belowSince, amount, claimed } = d.b;

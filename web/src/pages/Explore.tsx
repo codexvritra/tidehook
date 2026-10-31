@@ -74,10 +74,10 @@ export function Explore() {
           <aside className="hero-banner" aria-label="Protocol status">
             <h3>4 hooks · liquidity locked</h3>
             <ul>
-              <li>Liquidity locked forever at launch</li>
-              <li>No owner, no mint, no tax on tokens</li>
-              <li>Fees go to LPs; the creator collects them</li>
-              <li>Every rule enforced by the pool itself</li>
+              <li>No market-cap cap · no graduation · nothing gets stuck</li>
+              <li>Liquidity locked at launch, earning fees for the creator</li>
+              <li>Rename the coin any time (24h cooldown, public history)</li>
+              <li>Upgrade the hook or change the pair: timelocked v4 migration</li>
             </ul>
             <div className="hero-stats">
               <div>

@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createWalletClient, custom, numberToHex, type Address, type EIP1193Provider, type WalletClient } from "viem";
-import { robinhood } from "./chain";
+import { client, robinhood } from "./chain";
 
 // EIP-6963 multi-wallet discovery. Nothing is remembered between visits: connect is per session.
 
@@ -61,6 +61,35 @@ export function useNow(ms = 1000): number {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), ms);
+    return () => clearInterval(id);
+  }, [ms]);
+  return now;
+}
+
+// Chain clock: contracts judge cooldowns, timelocks and commitment ages by block.timestamp, so countdowns
+// follow the latest block's time instead of the viewer's (possibly wrong) system clock.
+let offset = 0;
+let synced = 0;
+async function syncOffset() {
+  if (Date.now() - synced < 15_000) return;
+  synced = Date.now();
+  try {
+    const b = await client.getBlock();
+    offset = Number(b.timestamp) - Math.floor(Date.now() / 1000);
+  } catch {
+    /* keep the last known offset */
+  }
+}
+
+/** Current chain time in seconds, re-rendering every `ms`. */
+export function useChainNow(ms = 1000): number {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000) + offset);
+  useEffect(() => {
+    syncOffset();
+    const id = setInterval(() => {
+      syncOffset();
+      setNow(Math.floor(Date.now() / 1000) + offset);
+    }, ms);
     return () => clearInterval(id);
   }, [ms]);
   return now;

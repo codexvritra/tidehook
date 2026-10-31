@@ -20,6 +20,7 @@ import {CreatorBondHook} from "../src/CreatorBondHook.sol";
 import {SessionHook} from "../src/SessionHook.sol";
 import {TideStack} from "./Launch.t.sol";
 import {TideLauncher} from "../src/TideLauncher.sol";
+import {TideLauncherBase} from "../src/TideLauncherBase.sol";
 import {TideRouter} from "../src/TideRouter.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
@@ -108,7 +109,7 @@ contract ForkLaunchTest is TideStack {
 
     function test_fork_launchTradeCollect_everyHook() public {
         for (uint8 k; k < 4; ++k) {
-            TideLauncher.Kind kind = TideLauncher.Kind(k);
+            TideLauncherBase.Kind kind = TideLauncherBase.Kind(k);
             (uint256 id, address token) = launcher.launch(_params(kind, address(0), ETH_START, 1_000));
             PoolKey memory key = launcher.getLaunch(id).key;
 
@@ -125,5 +126,24 @@ contract ForkLaunchTest is TideStack {
             assertGt(fee0 + fee1, 0, "locked liquidity earned fees");
             assertEq(ERC20(token).balanceOf(address(launcher)), 0);
         }
+    }
+
+    function test_fork_renameAndUpgradeHook() public {
+        (uint256 id, address token) =
+            launcher.launch(_params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 500));
+        PoolKey memory key = launcher.getLaunch(id).key;
+        _buy(key, 2 ether, "");
+
+        launcher.updateMetadata(id, "Renamed On Fork", "RFORK", "", "live rename");
+        assertEq(ERC20(token).symbol(), "RFORK");
+
+        launcher.proposeMigration(id, TideLauncherBase.Kind.Spring, address(0));
+        vm.warp(block.timestamp + 1 days + 1);
+        launcher.executeMigration(id, 0);
+
+        PoolKey memory newKey = launcher.getLaunch(id).key;
+        assertEq(address(newKey.hooks), address(spring));
+        uint256 out = _buy(newKey, 1 ether, "");
+        assertGt(out, 0, "trades on the upgraded pool against the live PoolManager");
     }
 }

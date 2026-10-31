@@ -3,7 +3,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const USED = {
-  TideLauncher: ["launch", "getLaunch", "getLaunches", "launchCount", "collectFees", "poolIdOf", "launchIdPlusOne", "Launched", "FeesCollected"],
+  TideLauncher: [
+    "launch", "getLaunch", "getLaunches", "launchCount", "collectFees", "poolIdOf", "launchIdPlusOne",
+    "updateMetadata", "proposeMigration", "cancelMigration", "executeMigration", "pendingMigration", "pastPools",
+    "routeFor", "quoteAllowed", "admin", "setQuoteAllowed", "setRoute",
+    "RENAME_COOLDOWN", "MIGRATION_DELAY", "MIGRATION_WINDOW",
+    "Launched", "FeesCollected", "MetadataUpdated", "MigrationProposed", "MigrationCancelled", "Migrated", "QuoteAllowed", "RouteSet",
+  ],
   TideRouter: ["swapExactIn", "quoteExactIn", "Trade"],
   PatienceHook: ["commit", "commitmentOf", "commitments", "feeForAge", "ageOf", "initializedAt", "baseFee", "minFee", "minAge", "rampDuration", "maxAge"],
   SpringHook: ["quoteFee", "restLimit", "springs", "baseFee", "minFee", "maxFee", "band", "stiffness"],
