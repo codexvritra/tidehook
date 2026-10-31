@@ -41,6 +41,7 @@ export function TokenPage({ id }: { id: number }) {
     [isCreator, id],
   );
   const [collecting, setCollecting] = useState(false);
+  const [tab, setTab] = useState<"trades" | "hook">("trades");
 
   if (err && !launch)
     return (
@@ -94,172 +95,224 @@ export function TokenPage({ id }: { id: number }) {
   }
 
   const panelProps = { launch: l, asset, poolId, onChanged: refresh };
+  const HookPanel = [PatiencePanel, SpringPanel, BondPanel, SessionPanel][l.kind];
+  const quoteDec = asset.decimals;
 
   return (
-    <section className="tight">
-      <div className="wrap">
-        <div className="token-head">
-          <Avatar src={l.imageURI} label={l.symbol} size={64} />
-          <div className="token-title">
-            <h2 style={{ margin: 0 }}>
-              {l.name} <span className="mono dim">${l.symbol}</span>
+    <div className="terminal">
+      <div className="tbar">
+        <div className="tbar-id">
+          <Avatar src={l.imageURI} label={l.symbol} size={46} />
+          <div style={{ minWidth: 0 }}>
+            <h2>
+              ${l.symbol} <span>{l.name}</span> <KindBadge kind={l.kind} />
             </h2>
-            <div className="row" style={{ gap: 8 }}>
-              <KindBadge kind={l.kind} />
-              <span className="pill mono">
-                {short(l.token)} <Copy text={l.token} />
+            <div className="tbar-meta">
+              <span>
+                CA {short(l.token)} <Copy text={l.token} />
               </span>
-              <a className="pill" href={explorer(l.token)} target="_blank" rel="noreferrer">
-                explorer ↗
+              <span>·</span>
+              <span>CREATED BY {isCreator ? "YOU" : short(l.creator)}</span>
+              <span>·</span>
+              <a href={explorer(l.token)} target="_blank" rel="noreferrer">
+                EXPLORER ↗
               </a>
-              <span className="pill">by {isCreator ? "you" : short(l.creator)}</span>
             </div>
-          </div>
-          <div className="token-price">
-            <b className="mono"><Price value={price} /></b>
-            <span className="dim">{asset.symbol} per token</span>
-            <span className={change >= 0 ? "ok" : "warn"}>
-              {change >= -0.005 ? "+" : ""}
-              {Math.abs(change) < 0.005 ? "0.00" : change.toFixed(2)}% since launch
-            </span>
           </div>
         </div>
-        {l.description && <p className="section-lede" style={{ marginBottom: 20 }}>{l.description}</p>}
-
-        <div className="token-grid">
-          <div className="token-main">
-            <div className="stats four">
-              <div className="stat">
-                <label>Market cap</label>
-                <b>
-                  {fmtNum(marketCap(price))} {asset.symbol}
-                </b>
-              </div>
-              <div className="stat">
-                <label>Volume</label>
-                <b>
-                  {fmtNum(volume)} {asset.symbol}
-                </b>
-              </div>
-              <div className="stat">
-                <label>Trades</label>
-                <b>{trades ? trades.length : "…"}</b>
-              </div>
-              <div className="stat">
-                <label>You hold</label>
-                <b>{session ? fmtNum(Number(formatUnits(myBal ?? 0n, 18))) : "—"}</b>
-              </div>
-            </div>
-
-            <div className="panel chart-panel">
-              <PriceChart points={points} symbol={l.symbol} />
-            </div>
-
-            {l.kind === 0 && <PatiencePanel {...panelProps} />}
-            {l.kind === 1 && <SpringPanel {...panelProps} />}
-            {l.kind === 2 && <BondPanel {...panelProps} />}
-            {l.kind === 3 && <SessionPanel {...panelProps} />}
-
-            <div className="panel">
-              <div className="panel-head">
-                <span className="tag">Trades · straight from PoolManager events</span>
-              </div>
-              {!trades ? (
-                <p className="muted">Loading…</p>
-              ) : trades.length === 0 ? (
-                <p className="muted" style={{ margin: 0 }}>
-                  No trades yet.
-                </p>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Side</th>
-                        <th>{l.symbol}</th>
-                        <th>{asset.symbol}</th>
-                        <th>Price</th>
-                        <th>Fee</th>
-                        <th>Tx</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...trades]
-                        .reverse()
-                        .slice(0, 40)
-                        .map((t) => (
-                          <tr key={t.tx + t.tokenAmount}>
-                            <td className={t.buy ? "ok" : "warn"}>{t.buy ? "Buy" : "Sell"}</td>
-                            <td className="mono">{fmtNum(Number(formatUnits(t.tokenAmount, 18)))}</td>
-                            <td className="mono">{fmtNum(Number(formatUnits(t.quoteAmount, asset.decimals)))}</td>
-                            <td className="mono"><Price value={tokenPrice(t.sqrtPriceX96, l.tokenIsCurrency0, asset.decimals)} /></td>
-                            <td className="mono dim">{(t.fee / 10_000).toFixed(2)}%</td>
-                            <td>
-                              <a className="mono" href={explorerTx(t.tx)} target="_blank" rel="noreferrer">
-                                {short(t.tx)}
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+        <div className="tbar-price">
+          <b>
+            <Price value={price} />{" "}
+            <span className="dim" style={{ fontSize: 12 }}>
+              {asset.symbol}
+            </span>
+          </b>
+          <span className={change > 0.005 ? "up" : change < -0.005 ? "down" : "dim"}>
+            {change > 0.005 ? "+" : ""}
+            {Math.abs(change) < 0.005 ? "0.00" : change.toFixed(2)}% since launch
+          </span>
+        </div>
+        <div className="tbar-stats">
+          <div>
+            <label>MCap</label>
+            <b>
+              {fmtNum(marketCap(price))} {asset.symbol}
+            </b>
           </div>
-
-          <aside className="token-side">
-            <Swap launch={l} asset={asset} poolId={poolId} onTraded={refresh} />
-
-            {isCreator && (
-              <div className="panel">
-                <div className="panel-head">
-                  <span className="tag">Creator · locked-liquidity fees</span>
-                </div>
-                <p className="muted" style={{ marginTop: 0 }}>
-                  Your launch liquidity is locked in the launcher forever and earns every swap fee. Collect them any time.
-                </p>
-                <dl className="kv">
-                  <dt>{l.tokenIsCurrency0 ? l.symbol : asset.symbol}</dt>
-                  <dd className="mono">{fees ? fmtNum(Number(formatUnits(fees[0], l.tokenIsCurrency0 ? 18 : asset.decimals))) : "…"}</dd>
-                  <dt>{l.tokenIsCurrency0 ? asset.symbol : l.symbol}</dt>
-                  <dd className="mono">{fees ? fmtNum(Number(formatUnits(fees[1], l.tokenIsCurrency0 ? asset.decimals : 18))) : "…"}</dd>
-                </dl>
-                <button className="btn primary block" disabled={collecting || !fees || fees[0] + fees[1] === 0n} onClick={collect}>
-                  {collecting ? <Spinner /> : "Collect fees"}
-                </button>
-              </div>
-            )}
-
-            <div className="panel">
-              <div className="panel-head">
-                <span className="tag">About this pool</span>
-              </div>
-              <p className="muted" style={{ marginTop: 0 }}>
-                <b>{KINDS[l.kind]}:</b> {KIND_BLURB[l.kind]}
-              </p>
-              <dl className="kv">
-                <dt>Hook</dt>
-                <dd>
-                  <a className="mono" href={explorer(l.key.hooks)} target="_blank" rel="noreferrer">
-                    {short(l.key.hooks)}
-                  </a>
-                </dd>
-                <dt>Pool id</dt>
-                <dd className="mono">
-                  {short(poolId)} <Copy text={poolId} />
-                </dd>
-                <dt>Liquidity</dt>
-                <dd>Locked forever</dd>
-                <dt>Supply</dt>
-                <dd className="mono">1,000,000,000</dd>
-                <dt>Paired with</dt>
-                <dd>{asset.symbol}</dd>
-              </dl>
-            </div>
-          </aside>
+          <div>
+            <label>Volume</label>
+            <b>
+              {fmtNum(volume)} {asset.symbol}
+            </b>
+          </div>
+          <div>
+            <label>Trades</label>
+            <b>{trades ? trades.length : "…"}</b>
+          </div>
+          <div>
+            <label>Liquidity</label>
+            <b className="up">Locked ∞</b>
+          </div>
         </div>
       </div>
-    </section>
+
+      <div className="tgrid">
+        <div className="tmain">
+          <div className="panel chart-panel">
+            <div className="chart-head">
+              <b>
+                {l.symbol}/{asset.symbol}
+              </b>
+              <span>Price per trade · from PoolManager swaps</span>
+              <span style={{ marginLeft: "auto" }}>
+                Launch <Price value={startPrice} />
+              </span>
+            </div>
+            <div className="chart-box">
+              <PriceChart points={points} symbol={l.symbol} />
+            </div>
+          </div>
+
+          <div className="tabs" role="tablist">
+            <button className={tab === "trades" ? "on" : ""} onClick={() => setTab("trades")}>
+              Txns {trades ? `(${trades.length})` : ""}
+            </button>
+            <button className={tab === "hook" ? "on" : ""} onClick={() => setTab("hook")}>
+              {KINDS[l.kind]} hook
+            </button>
+          </div>
+
+          {tab === "hook" && (
+            <div style={{ padding: 16 }}>
+              <HookPanel {...panelProps} />
+            </div>
+          )}
+
+          {tab === "trades" && (
+            <div className="trades">
+              {!trades ? (
+                <p className="muted" style={{ padding: 16 }}>
+                  Loading…
+                </p>
+              ) : trades.length === 0 ? (
+                <p className="muted" style={{ padding: 16, margin: 0 }}>
+                  No trades yet. Be the first buyer.
+                </p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Price</th>
+                      <th>{asset.symbol}</th>
+                      <th>{l.symbol}</th>
+                      <th>Fee</th>
+                      <th>Tx</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...trades]
+                      .reverse()
+                      .slice(0, 60)
+                      .map((t) => (
+                        <tr key={t.tx + t.tokenAmount}>
+                          <td className={t.buy ? "up" : "down"}>
+                            <b>{t.buy ? "BUY" : "SELL"}</b>
+                          </td>
+                          <td className={t.buy ? "up" : "down"}>
+                            <Price value={tokenPrice(t.sqrtPriceX96, l.tokenIsCurrency0, quoteDec)} />
+                          </td>
+                          <td>{fmtNum(Number(formatUnits(t.quoteAmount, quoteDec)))}</td>
+                          <td>{fmtNum(Number(formatUnits(t.tokenAmount, 18)))}</td>
+                          <td className="dim">{(t.fee / 10_000).toFixed(2)}%</td>
+                          <td>
+                            <a href={explorerTx(t.tx)} target="_blank" rel="noreferrer">
+                              {short(t.tx)}
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+
+        <aside className="tside">
+          <Swap launch={l} asset={asset} poolId={poolId} onTraded={refresh} />
+
+          {isCreator && (
+            <div className="panel">
+              <div className="panel-head">
+                <span className="tag">Creator fees</span>
+              </div>
+              <p className="muted" style={{ marginTop: 0, fontSize: 12 }}>
+                Your launch liquidity is locked forever and earns every swap fee. Collect any time.
+              </p>
+              <dl className="kv">
+                <dt>{l.tokenIsCurrency0 ? l.symbol : asset.symbol}</dt>
+                <dd>{fees ? fmtNum(Number(formatUnits(fees[0], l.tokenIsCurrency0 ? 18 : quoteDec))) : "…"}</dd>
+                <dt>{l.tokenIsCurrency0 ? asset.symbol : l.symbol}</dt>
+                <dd>{fees ? fmtNum(Number(formatUnits(fees[1], l.tokenIsCurrency0 ? quoteDec : 18))) : "…"}</dd>
+              </dl>
+              <button className="btn primary block" disabled={collecting || !fees || fees[0] + fees[1] === 0n} onClick={collect}>
+                {collecting ? <Spinner /> : "Collect fees"}
+              </button>
+            </div>
+          )}
+
+          {l.description && (
+            <div className="panel">
+              <div className="panel-head">
+                <span className="tag">Description</span>
+              </div>
+              <p className="muted" style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap" }}>
+                {l.description}
+              </p>
+            </div>
+          )}
+
+          <div className="panel">
+            <div className="panel-head">
+              <span className="tag">Token info</span>
+            </div>
+            <dl className="kv">
+              <dt>MCap</dt>
+              <dd>
+                {fmtNum(marketCap(price))} {asset.symbol}
+              </dd>
+              <dt>Launch MCap</dt>
+              <dd>
+                {fmtNum(marketCap(startPrice))} {asset.symbol}
+              </dd>
+              <dt>Max supply</dt>
+              <dd>1,000,000,000</dd>
+              <dt>You hold</dt>
+              <dd>{session ? fmtNum(Number(formatUnits(myBal ?? 0n, 18))) : "—"}</dd>
+              <dt>Hook</dt>
+              <dd>
+                <a href={explorer(l.key.hooks)} target="_blank" rel="noreferrer">
+                  {KINDS[l.kind]} {short(l.key.hooks)}
+                </a>
+              </dd>
+              <dt>Pool id</dt>
+              <dd>
+                {short(poolId)} <Copy text={poolId} />
+              </dd>
+              <dt>Liquidity</dt>
+              <dd className="up">Locked forever</dd>
+              <dt>Paired with</dt>
+              <dd>{asset.symbol}</dd>
+              <dt>Created</dt>
+              <dd>{new Date(l.createdAt * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC</dd>
+            </dl>
+            <p className="note" style={{ marginBottom: 0 }}>
+              <b className="lime">{KINDS[l.kind]}:</b> {KIND_BLURB[l.kind]}
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
   );
 }

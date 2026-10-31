@@ -35,3 +35,22 @@ export function Price({ value }: { value: number }) {
     </>
   );
 }
+
+/** tidehook mark: a hook dropping into a wave, drawn on a pixel grid. */
+export function Logo({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true">
+      <g fill="#d0ff00">
+        <rect x="9" y="1" width="2" height="7" />
+        <rect x="7" y="8" width="2" height="2" />
+        <rect x="9" y="8" width="2" height="2" />
+        <rect x="5" y="6" width="2" height="3" />
+        <rect x="1" y="12" width="3" height="2" />
+        <rect x="4" y="11" width="2" height="2" />
+        <rect x="6" y="12" width="3" height="2" />
+        <rect x="9" y="11" width="2" height="2" />
+        <rect x="11" y="12" width="4" height="2" />
+      </g>
+    </svg>
+  );
+}

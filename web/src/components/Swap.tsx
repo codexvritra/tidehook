@@ -173,12 +173,14 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
     }
   }
 
-  const max = () => {
+  const fraction = (pct: number) => {
     if (balIn === undefined) return;
+    // Keep a little native ETH back for gas when spending ETH.
     const reserve = inAsset === ETH ? parseUnits("0.0005", 18) : 0n;
-    const v = balIn > reserve ? balIn - reserve : 0n;
-    setAmount(formatUnits(v, inDecimals));
+    const spendable = balIn > reserve ? balIn - reserve : 0n;
+    setAmount(formatUnits((spendable * BigInt(pct)) / 100n, inDecimals));
   };
+  const max = () => fraction(100);
 
   const slowLane = l.kind === 0 && lane === "slow";
 
@@ -223,6 +225,15 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
           <span className="unit">{inSymbol}</span>
         </div>
       </div>
+      {session && (
+        <div className="pcts">
+          {[25, 50, 75, 100].map((p) => (
+            <button key={p} onClick={() => fraction(p)}>
+              {p}%
+            </button>
+          ))}
+        </div>
+      )}
 
       {!slowLane && (
         <div className="quote">
@@ -298,7 +309,7 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
           )}
         </button>
       ) : (
-        <button className={`btn primary block ${buy ? "" : "sell"}`} disabled={!quote || !!busy || quote.out === 0n} onClick={swap}>
+        <button className={`btn block ${buy ? "buy" : "sell"}`} disabled={!quote || !!busy || quote.out === 0n} onClick={swap}>
           {busy === "swap" ? (
             <>
               <Spinner /> Swapping…

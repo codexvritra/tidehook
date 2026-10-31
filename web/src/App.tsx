@@ -9,22 +9,7 @@ import { GITHUB_URL, IS_LOCAL } from "./lib/chain";
 import { readDeployment, usePoll } from "./lib/data";
 import { short } from "./lib/format";
 import { connect, useWallets, type Session } from "./lib/wallet";
-
-function Logo() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
-      <defs>
-        <linearGradient id="lg" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0" stopColor="#5eead4" />
-          <stop offset="1" stopColor="#38bdf8" />
-        </linearGradient>
-      </defs>
-      <circle cx="16" cy="16" r="15" fill="none" stroke="url(#lg)" strokeWidth="1.5" opacity=".5" />
-      <path d="M4 18c3-3 6-3 9 0s6 3 9 0 4-2 6-1" fill="none" stroke="url(#lg)" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M19 6v8a4 4 0 0 1-8 0" fill="none" stroke="#e6ecf7" strokeWidth="2.4" strokeLinecap="round" />
-    </svg>
-  );
-}
+import { Logo } from "./components/bits";
 
 function Wallet({ session, setSession, toast, openSignal }: { session: Session | null; setSession: (s: Session | null) => void; toast: AppState["toast"]; openSignal: number }) {
   const wallets = useWallets();
@@ -50,8 +35,8 @@ function Wallet({ session, setSession, toast, openSignal }: { session: Session |
 
   return (
     <div className="wallet" ref={ref}>
-      <button className="btn primary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        Connect
+      <button className="btn ghost-lime" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        Connect Wallet
       </button>
       {open && (
         <div className="menu" role="menu">
@@ -117,20 +102,29 @@ export default function App() {
       <nav className="nav">
         <div className="wrap">
           <a className="brand" href="#/">
-            <Logo /> tidehook
+            <Logo size={26} /> tidehook
           </a>
           <div className="nav-links">
-            {tab("explore", "Explore", "#/")}
-            {tab("launch", "Launch", "#/launch")}
-            {tab("about", "How it works", "#/about")}
-            {deploy && !deploy.ready && tab("deploy", "Deploy", "#/deploy")}
+            {tab("explore", "Home", "#/")}
+            {tab("launch", "Create", "#/launch")}
+            {tab("about", "Hooks", "#/about")}
+            {tab("deploy", "Deploy", "#/deploy")}
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer">
+              GitHub
+            </a>
           </div>
-          <Wallet session={session} setSession={setSession} toast={toast} openSignal={openSignal} />
+          <div className="nav-right">
+            <span className="chain-pill" title="Robinhood Chain · 4663">
+              <i /> Robinhood
+            </span>
+            <Wallet session={session} setSession={setSession} toast={toast} openSignal={openSignal} />
+          </div>
         </div>
         <div className="mobile-tabs">
-          {tab("explore", "Explore", "#/")}
-          {tab("launch", "Launch", "#/launch")}
-          {tab("about", "How", "#/about")}
+          {tab("explore", "Home", "#/")}
+          {tab("launch", "Create", "#/launch")}
+          {tab("about", "Hooks", "#/about")}
+          {tab("deploy", "Deploy", "#/deploy")}
         </div>
       </nav>
 
