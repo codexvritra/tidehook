@@ -1,0 +1,178 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@400;700&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; background: #070808; overflow: hidden; color: #e8ffe0; font-family: 'JetBrains Mono', monospace; }
+  .bg { position: absolute; inset: 0; background-image: linear-gradient(rgba(208,255,0,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(208,255,0,.05) 1px, transparent 1px); background-size: 40px 40px; }
+  .glow { position: absolute; width: 1500px; height: 1100px; left: 50%; top: 50%; transform: translate(-50%,-50%); background: radial-gradient(circle, rgba(208,255,0,.12), transparent 60%); }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .pixel { font-family: 'Silkscreen', monospace; font-weight: 700; }
+  .lime { color: #d0ff00; }
+  .pct { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+  .brand { position: absolute; left: 96px; top: 70px; display: flex; align-items: center; gap: 18px; }
+  .brand img { width: 52px; height: 52px; image-rendering: pixelated; }
+  .brand b { font-family: 'Silkscreen', monospace; font-size: 34px; color: #d0ff00; letter-spacing: 2px; }
+  .handle { position: absolute; right: 96px; top: 82px; font-size: 26px; color: #9ca3af; }
+  .num { font-size: 30px; letter-spacing: 6px; color: #9ca3af; }
+  .num b { color: #d0ff00; }
+  .title { font-family: 'Silkscreen', monospace; font-weight: 700; font-size: 100px; line-height: 1.04; color: #fff; margin-top: 14px; }
+  .sub { font-size: 32px; color: #9ca3af; margin-top: 26px; line-height: 1.4; }
+  .left { position: absolute; left: 120px; top: 250px; width: 880px; }
+  .chip { display: inline-block; padding: 12px 22px; border: 2px solid rgba(208,255,0,.6); color: #d0ff00; font-size: 30px; font-weight: 700; background: rgba(208,255,0,.06); }
+  .chip.on { background: #d0ff00; color: #070808; }
+  .card { position: absolute; left: 1080px; width: 720px; border: 2px solid rgba(208,255,0,.45); background: rgba(208,255,0,.04); }
+  #wave { position: absolute; left: 0; right: 0; bottom: 0; height: 140px; }
+</style>
+</head>
+<body>
+<div class="bg"></div><div class="glow"></div>
+<svg id="wave" viewBox="0 0 1920 140" preserveAspectRatio="none" shape-rendering="crispEdges"><g fill="#d0ff00" opacity=".14" id="waveg"></g></svg>
+<div class="brand" id="brand"><img src="../mark.svg"><b>TIDEHOOK</b></div>
+<div class="handle" id="handle">@TIDEHOOK</div>
+
+<!-- 0: intro -->
+<div class="scene" id="s0">
+  <div id="s0k" style="position:absolute;left:0;right:0;top:330px;text-align:center;font-size:36px;letter-spacing:8px;color:#9ca3af">JUST SHIPPED</div>
+  <div id="s0t" class="pixel" style="position:absolute;left:0;right:0;top:400px;text-align:center;font-size:150px;color:#d0ff00;text-shadow:0 0 40px rgba(208,255,0,.4)">LIVE NOW</div>
+  <div id="s0s" style="position:absolute;left:0;right:0;top:600px;text-align:center;font-size:40px;color:#fff;letter-spacing:3px"></div>
+</div>
+
+<!-- 1: limit orders -->
+<div class="scene" id="s1">
+  <div class="left">
+    <div class="num"><b>01</b> / 03</div>
+    <div class="title">LIMIT<br><span class="lime">ORDERS.</span></div>
+    <div class="sub">Take profit at +100<span class="pct">%</span>. Buy the dip at -25<span class="pct">%</span>.<br>Right inside the coin's own pool.</div>
+  </div>
+  <svg style="position:absolute;left:1060px;top:230px" width="760" height="600" viewBox="0 0 760 600">
+    <line x1="0" y1="150" x2="760" y2="150" stroke="#f23645" stroke-width="3" stroke-dasharray="12 10"/>
+    <text x="10" y="134" fill="#f23645" font-size="26" font-family="JetBrains Mono" font-weight="700">TAKE PROFIT +100%</text>
+    <line x1="0" y1="470" x2="760" y2="470" stroke="#2bc235" stroke-width="3" stroke-dasharray="12 10"/>
+    <text x="10" y="508" fill="#2bc235" font-size="26" font-family="JetBrains Mono" font-weight="700">BUY THE DIP -25%</text>
+    <path id="s1path" fill="none" stroke="#d0ff00" stroke-width="6" stroke-linejoin="round"/>
+    <circle id="s1dot" r="12" fill="#d0ff00"/>
+  </svg>
+  <div id="s1fill" class="chip on" style="position:absolute;left:1500px;top:290px;opacity:0">✓ FILLED</div>
+</div>
+
+<!-- 2: DCA -->
+<div class="scene" id="s2">
+  <div class="left">
+    <div class="num"><b>02</b> / 03</div>
+    <div class="title">DCA,<br><span class="lime">ON AUTOPILOT.</span></div>
+    <div class="sub">Split a buy or sell into slices.<br>Every hour, 4h, 12h or day.</div>
+  </div>
+  <div class="card" style="top:330px;height:420px">
+    <div style="position:absolute;left:34px;top:26px;font-size:26px;color:#9ca3af">DCA BUY · 1 ETH · 10 SLICES · EVERY 1H</div>
+    <div id="s2grid" style="position:absolute;left:34px;top:90px;width:652px;display:grid;grid-template-columns:repeat(5,1fr);gap:14px"></div>
+    <div id="s2count" class="pixel" style="position:absolute;left:34px;bottom:30px;font-size:44px;color:#fff">0 / 10</div>
+    <div style="position:absolute;right:34px;bottom:40px;font-size:24px;color:#9ca3af">no extra fee</div>
+  </div>
+</div>
+
+<!-- 3: holder veto -->
+<div class="scene" id="s3">
+  <div class="left">
+    <div class="num"><b>03</b> / 03</div>
+    <div class="title">HOLDERS<br>CAN <span class="lime">VETO.</span></div>
+    <div class="sub">Dev announces a pair or hook switch?<br>Holders lock 10<span class="pct">%</span> of supply and block it.</div>
+  </div>
+  <div class="card" style="top:380px;padding:34px;box-sizing:border-box">
+    <div style="font-size:26px;color:#9ca3af">SWITCH ETH → NVDA · NOTICE 24H</div>
+    <div style="height:70px;border:2px solid #2c3644;margin-top:26px;position:relative;overflow:hidden">
+      <div id="s3bar" style="position:absolute;left:0;top:0;bottom:0;width:0;background:#f23645"></div>
+      <div style="position:absolute;left:100%;top:0;bottom:0"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:24px;color:#9ca3af"><span id="s3pct">0% locked</span><span>needs 10%</span></div>
+    <div id="s3stamp" class="pixel" style="margin-top:26px;font-size:64px;color:#f23645;opacity:0">BLOCKED</div>
+  </div>
+</div>
+
+<!-- 4: cta -->
+<div class="scene" id="s4">
+  <div style="position:absolute;left:0;right:0;top:250px;text-align:center">
+    <div class="pixel" style="font-size:84px;color:#fff">NO OTHER PAD<br><span class="lime">HAS THIS.</span></div>
+    <div style="font-size:34px;color:#9ca3af;margin-top:28px">limit orders · DCA · holder veto · stock pairs · flat 2<span class="pct">%</span></div>
+    <div id="s4url" class="chip on" style="margin-top:56px;font-size:48px;padding:22px 44px">tidehook.net</div>
+    <div style="margin-top:30px;font-size:32px;color:#d0ff00">@TIDEHOOK · Robinhood Chain</div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = (x) => 1 - Math.pow(1 - x, 3);
+const SCENES = [[0, 3], [3, 7.2], [7.2, 11.4], [11.4, 15.6], [15.6, 19.5]];
+$("s2grid").innerHTML = Array.from({ length: 10 }, (_, i) => `<div id="sl${i}" style="height:90px;border:2px solid rgba(208,255,0,.35)"></div>`).join("");
+
+function wave(t) {
+  let s = "";
+  for (let x = 0; x < 1920; x += 12) {
+    const h = Math.round(48 + 30 * Math.sin(x / 110 + t * 1.6) + 14 * Math.sin(x / 43 - t * 2.3));
+    s += `<rect x="${x}" y="${140 - h}" width="11" height="${h}"/>`;
+  }
+  $("waveg").innerHTML = s;
+}
+
+window.render = function (t) {
+  wave(t);
+  SCENES.forEach(([a, b], i) => {
+    const alpha = ease(seg(t, a, a + 0.45)) * (i === SCENES.length - 1 ? 1 : 1 - ease(seg(t, b - 0.45, b)));
+    $("s" + i).style.opacity = alpha;
+    $("s" + i).style.transform = `translateY(${(1 - ease(seg(t, a, a + 0.6))) * 30}px)`;
+  });
+  const hdr = t < 3 ? ease(seg(t, 2.4, 3)) : 1;
+  $("brand").style.opacity = hdr;
+  $("handle").style.opacity = hdr;
+
+  // intro
+  $("s0k").style.opacity = ease(seg(t, 0.1, 0.6));
+  $("s0t").style.transform = `scale(${0.7 + 0.3 * ease(seg(t, 0.2, 0.9))})`;
+  const line = "LIMIT ORDERS · DCA · HOLDER VETO";
+  $("s0s").textContent = line.slice(0, Math.floor(seg(t, 1.0, 2.3) * line.length));
+
+  // limit orders: price dips to the buy line, then rips through the take-profit line
+  const p = seg(t, 3.5, 6.6);
+  const N = Math.max(2, Math.floor(p * 80));
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / 80;
+    const y = u < 0.35 ? 330 + (u / 0.35) * 150 + 14 * Math.sin(u * 40) : 480 - Math.pow((u - 0.35) / 0.65, 1.3) * 400 + 12 * Math.sin(u * 33);
+    pts.push([20 + u * 720, y]);
+  }
+  $("s1path").setAttribute("d", "M" + pts.map((q) => q.map((v) => v.toFixed(1)).join(",")).join(" L"));
+  const last = pts[pts.length - 1];
+  $("s1dot").setAttribute("cx", last[0]);
+  $("s1dot").setAttribute("cy", last[1]);
+  $("s1fill").style.opacity = ease(seg(t, 6.2, 6.6));
+
+  // DCA: slices fill one by one
+  let done = 0;
+  for (let i = 0; i < 10; i++) {
+    const on = t > 7.9 + i * 0.3;
+    if (on) done++;
+    const el = $("sl" + i);
+    el.style.background = on ? "#d0ff00" : "transparent";
+    el.style.borderColor = on ? "#d0ff00" : "rgba(208,255,0,.35)";
+  }
+  $("s2count").innerHTML = `${done} / 10 <span style="font-size:28px;color:#9ca3af">BOUGHT</span>`;
+
+  // veto: bar fills past the 10% threshold, then BLOCKED
+  const v = ease(seg(t, 12.0, 14.0));
+  const lockedPct = v * 12.4;
+  $("s3bar").style.width = Math.min(100, (lockedPct / 10) * 100) + "%";
+  $("s3pct").textContent = lockedPct.toFixed(1) + "% locked";
+  $("s3stamp").style.opacity = ease(seg(t, 13.9, 14.3));
+  $("s3stamp").style.transform = `scale(${1.4 - 0.4 * ease(seg(t, 13.9, 14.3))})`;
+
+  // cta
+  $("s4url").style.transform = `scale(${1 + 0.03 * Math.sin(Math.max(0, t - 16.2) * 6)})`;
+};
+window.DURATION = 19.5;
+render(0);
+</script>
+</body>
+</html>
