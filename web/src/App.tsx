@@ -5,7 +5,7 @@ import { Explore } from "./pages/Explore";
 import { LaunchPage } from "./pages/Launch";
 import { TokenPage } from "./pages/Token";
 import { AppCtx, useRoute, type AppState } from "./lib/appContext";
-import { ADDR, GITHUB_URL, IS_LOCAL } from "./lib/chain";
+import { ADDR, GITHUB_URL, IS_LOCAL, X_URL } from "./lib/chain";
 import { readDeployment, usePoll } from "./lib/data";
 import { short } from "./lib/format";
 import { connect, useWallets, type Session } from "./lib/wallet";
@@ -111,6 +111,11 @@ export default function App() {
             {tab("deploy", "Deploy", "#/deploy")}
           </div>
           <div className="nav-right">
+            <a className="soc nav-x" href={X_URL} target="_blank" rel="noreferrer noopener" title="@TIDEHOOK on X" aria-label="tidehook on X">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                <path d="M18.9 2H22l-6.8 7.8L23 22h-6.2l-4.8-6.3L6.4 22H3.3l7.3-8.3L1 2h6.3l4.4 5.8L18.9 2Zm-1.1 18h1.7L6.3 3.9H4.5L17.8 20Z" />
+              </svg>
+            </a>
             <span className="chain-pill" title="Robinhood Chain · 4663">
               <i /> Robinhood
             </span>
@@ -149,6 +154,10 @@ export default function App() {
             or Uniswap Labs.
           </p>
           <p>
+            <a href={X_URL} target="_blank" rel="noreferrer noopener">
+              @TIDEHOOK on X
+            </a>{" "}
+            ·{" "}
             <a href={GITHUB_URL} target="_blank" rel="noreferrer">
               Source
             </a>{" "}

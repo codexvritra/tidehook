@@ -437,3 +437,5 @@ sub.zeros { font-size: 0.7em; vertical-align: -0.25em; margin: 0 1px; opacity: 0
 .kv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .kv-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .kv-table td:first-child { padding-left: 0; }
+
+.nav-x { width: 30px; height: 30px; }
