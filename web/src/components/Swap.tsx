@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatUnits, parseUnits, type Address, type Hex } from "viem";
+import { encodeAbiParameters, formatUnits, parseUnits, type Address, type Hex } from "viem";
 import { patienceHookAbi, sessionHookAbi, springHookAbi, tideRouterAbi, tideTokenAbi } from "../lib/abis";
 import { useApp } from "../lib/appContext";
 import { ADDR, ETH, client } from "../lib/chain";
@@ -120,7 +120,8 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
         address: ADDR.router,
         abi: tideRouterAbi,
         functionName: "swapExactIn",
-        args: [{ key: l.key, zeroForOne, amountIn, minOut, sqrtPriceLimitX96: limit, hookData: "0x" }, s.account, await chainDeadline()],
+        // Pot coins: name the buyer as pot leader (works for smart wallets too).
+        args: [{ key: l.key, zeroForOne, amountIn, minOut, sqrtPriceLimitX96: limit, hookData: l.kind === 4 && buy ? encodeAbiParameters([{ type: "address" }], [s.account]) : "0x" }, s.account, await chainDeadline()],
         value: inAsset === ETH ? amountIn : 0n,
       });
       toast(`Swapped ${fmtNum(Number(formatUnits(quote.amountIn, inDecimals)))} ${inSymbol} for ${fmtNum(Number(formatUnits(quote.out, outDecimals)))} ${outSymbol}.`);

@@ -15,6 +15,7 @@ import { CreatorTransfer, ManagePanel, PendingBanner } from "../components/Manag
 import { EarningsPanel } from "../components/Earnings";
 import { VetoPanel } from "../components/Veto";
 import { OrdersPanel } from "../components/Orders";
+import { PotPanel } from "../components/PotPanel";
 import { Copy } from "../components/ui";
 import { useTokenMeta } from "../lib/media";
 import { useUsdPrices } from "../lib/usd";
@@ -102,7 +103,7 @@ export function TokenPage({ id }: { id: number }) {
   };
 
   const panelProps = { launch: l, asset, poolId, onChanged: refresh };
-  const HookPanel = [PatiencePanel, SpringPanel, BondPanel, SessionPanel][l.kind];
+  const HookPanel = [PatiencePanel, SpringPanel, BondPanel, SessionPanel, PotPanel][l.kind];
   const meta = tokenMeta;
   const quoteDec = asset.decimals;
 
@@ -363,6 +364,7 @@ export function TokenPage({ id }: { id: number }) {
         </div>
 
         <aside className="tside">
+          {l.kind === 4 && <PotPanel launch={l} asset={asset} poolId={poolId} onChanged={refresh} />}
           <Swap launch={l} asset={asset} poolId={poolId} onTraded={refresh} />
           <OrdersPanel launch={l} asset={asset} poolId={poolId} onChanged={refresh} />
           <VetoPanel launch={l} pending={pending ?? null} onChanged={refresh} />

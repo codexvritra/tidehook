@@ -132,9 +132,9 @@ export function ManagePanel({ launch: l, pending, onChanged }: { launch: Launch;
 
       <div className="subpanel">
         <h3>Upgrade hook / change pair</h3>
-        {l.kind === 2 ? (
+        {l.kind === 2 || l.kind === 4 ? (
           <p className="note" style={{ marginTop: 0 }}>
-            Bond launches can't migrate: the creator escrow is tied to this pool's price.
+            {l.kind === 2 ? "Bond launches can't migrate: the creator escrow is tied to this pool's price." : "Pot launches can't migrate: the running pot belongs to this pool."}
           </p>
         ) : pending ? (
           <>

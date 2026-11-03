@@ -28,9 +28,14 @@ contract TideMigrator is TideLauncherBase {
 
     address private immutable self = address(this);
 
-    constructor(IPoolManager _poolManager, address _patience, address _spring, address _bond, address _session)
-        TideLauncherBase(_poolManager, _patience, _spring, _bond, _session)
-    {}
+    constructor(
+        IPoolManager _poolManager,
+        address _patience,
+        address _spring,
+        address _bond,
+        address _session,
+        address _pot
+    ) TideLauncherBase(_poolManager, _patience, _spring, _bond, _session, _pot) {}
 
     function migrate(uint256 id, Migration memory m, uint256 minQuoteOut) external {
         if (address(this) == self) revert NotDelegated();

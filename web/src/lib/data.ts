@@ -29,12 +29,13 @@ export type Launch = {
   quote: Address;
 };
 
-export const KINDS = ["Patience", "Spring", "Bond", "Session"] as const;
+export const KINDS = ["Patience", "Spring", "Bond", "Session", "Pot"] as const;
 export const KIND_BLURB = [
   "Swap instantly, or commit first and reveal later so bots can't see your size coming.",
   "Tracks a time-weighted rest price on-chain, a live read of where the market settles.",
   "Creator tokens stay locked until the price has held above a floor. If it falls below, anyone can burn them.",
   "Built for coins paired with tokenized stocks, trading 24/7 around the market clock.",
+  "A pot game in the pool: the creator's 1% of buys fills a pot, and the last buyer before the 1-hour clock runs out wins it.",
 ];
 
 /** Re-runs `fn` every `ms` while the tab is visible. Returns [data, error, reload]. */

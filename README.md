@@ -234,3 +234,12 @@ proposal starts a fresh count. `web/scripts/veto-fork.mjs` runs it end to end on
   (address at `/health`) and stays idle until that wallet holds at least 0.0002 ETH.
 
 `web/scripts/orders-fork.mjs` runs both on a mainnet fork.
+
+## Tide Pot hook (launcher v3)
+
+`TidePotHook` turns a coin's own trading into a last-buyer-wins game, inside the v4 swap path. Every trade still costs
+exactly 2%, but on a Pot coin the creator's 1% of each buy fills the pool's pot (in ETH or the paired stock). A buy
+worth at least 2% of the current pot makes the buyer the leader (named in hookData, else `tx.origin`) and resets a
+1-hour clock. When the clock runs out the leader wins 80% of the pot and 20% seeds the next round; the next swap or
+`settle` closes the round and the winner withdraws with `claim`. Sells never touch the pot. Pot coins can't migrate,
+since a running pot belongs to its pool. `web/scripts/pot-fork.mjs` runs a full round on a mainnet fork.

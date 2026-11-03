@@ -11,7 +11,7 @@ import {Script, console} from "forge-std/Script.sol";
 ///   forge script script/Deploy.s.sol --rpc-url https://rpc.mainnet.chain.robinhood.com --broadcast --account <keystore>
 contract Deploy is Script {
     address constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
-    uint256 constant COUNT = 9;
+    uint256 constant COUNT = 10;
 
     function run() external {
         string memory json = vm.readFile(string.concat(vm.projectRoot(), "/web/src/deploy/initcode.json"));

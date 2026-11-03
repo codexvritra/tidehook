@@ -73,17 +73,18 @@ const session = add(
   initCode("SessionHook", ["address", "address"], [POOL_MANAGER, ZERO]),
   FLAG.beforeInitialize | FEES,
 );
+const pot = add("TidePotHook", initCode("TidePotHook", ["address"], [POOL_MANAGER]), FLAG.beforeInitialize | FEES);
 const factory = add("TideTokenFactory", initCode("TideTokenFactory", [], []));
 const migrator = add(
   "TideMigrator",
-  initCode("TideMigrator", ["address", "address", "address", "address", "address"], [POOL_MANAGER, patience, spring, bond, session]),
+  initCode("TideMigrator", ["address", "address", "address", "address", "address", "address"], [POOL_MANAGER, patience, spring, bond, session, pot]),
 );
 const launcher = add(
   "TideLauncher",
   initCode(
     "TideLauncher",
-    ["address", "address", "address", "address", "address", "address", "address"],
-    [POOL_MANAGER, factory, migrator, patience, spring, bond, session],
+    ["address", "address", "address", "address", "address", "address", "address", "address"],
+    [POOL_MANAGER, factory, migrator, patience, spring, bond, session, pot],
   ),
 );
 const router = add("TideRouter", initCode("TideRouter", ["address"], [POOL_MANAGER]));
@@ -121,6 +122,7 @@ export const ADDR = {
   spring: "${spring}",
   bond: "${bond}",
   session: "${session}",
+  pot: "${pot}",
   factory: "${factory}",
   migrator: "${migrator}",
   launcher: "${launcher}",

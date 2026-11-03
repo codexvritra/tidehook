@@ -60,8 +60,9 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         address _patience,
         address _spring,
         address _bond,
-        address _session
-    ) TideLauncherBase(_poolManager, _patience, _spring, _bond, _session) {
+        address _session,
+        address _pot
+    ) TideLauncherBase(_poolManager, _patience, _spring, _bond, _session, _pot) {
         tokenFactory = _factory;
         migrator = _migrator;
         veto = new TideVeto(address(this), address(_poolManager));
@@ -157,6 +158,7 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
     function proposeMigration(uint256 id, Kind kind, address quote) external {
         Launch storage l = _creatorOf(id);
         if (l.kind == Kind.Bond || kind == Kind.Bond) revert BadParams("bond");
+        if (l.kind == Kind.Pot || kind == Kind.Pot) revert BadParams("pot"); // a running pot belongs to its pool
         address oldQuote = _quoteOf(l);
         if (kind == l.kind && quote == oldQuote) revert BadParams("same pool");
         if (quote == l.token) revert BadParams("quote");

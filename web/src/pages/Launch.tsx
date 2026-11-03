@@ -23,6 +23,7 @@ const KIND_DETAIL = [
   ["Flat 2% per trade, no LP fee", "Tracks an on-chain rest price", "Movable to another hook or pair later"],
   ["Flat 2% per trade, no LP fee", "Only kind with a creator allocation (≥30d vest)", "Anyone can burn it if the floor breaks"],
   ["Flat 2% per trade, no LP fee", "Built for tokenized-stock pairs", "Trades 24/7"],
+  ["Flat 2% per trade, no LP fee", "Creator's 1% fills a pot", "Last buyer before the 1h clock wins 80%"],
 ];
 
 export function LaunchPage() {

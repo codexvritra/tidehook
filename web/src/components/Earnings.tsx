@@ -15,6 +15,7 @@ const HOOKS: [string, Address][] = [
   ["Spring", ADDR.spring],
   ["Bond", ADDR.bond],
   ["Session", ADDR.session],
+  ["Pot", ADDR.pot],
 ];
 
 /** Unclaimed fees of `account` in `asset`, per hook. */

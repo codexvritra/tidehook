@@ -18,6 +18,7 @@ import {PatienceHook} from "../src/PatienceHook.sol";
 import {SpringHook} from "../src/SpringHook.sol";
 import {CreatorBondHook} from "../src/CreatorBondHook.sol";
 import {SessionHook} from "../src/SessionHook.sol";
+import {TidePotHook} from "../src/TidePotHook.sol";
 import {TideLauncher} from "../src/TideLauncher.sol";
 import {TideLauncherBase} from "../src/TideLauncherBase.sol";
 import {TideRouter} from "../src/TideRouter.sol";
@@ -33,6 +34,7 @@ abstract contract TideStack is Test, Deployers {
     SpringHook spring;
     CreatorBondHook bondHook;
     SessionHook session;
+    TidePotHook pot;
     TideLauncher launcher;
     TideRouter router;
 
@@ -70,6 +72,15 @@ abstract contract TideStack is Test, Deployers {
                         | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
                 ) | (4 << 20)
         );
+        address t = address(
+            base
+                | uint160(
+                    Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
+                        | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+                ) | (5 << 20)
+        );
+        deployCodeTo("TidePotHook.sol:TidePotHook", abi.encode(pm), t);
+        pot = TidePotHook(t);
         deployCodeTo(
             "PatienceHook.sol:PatienceHook",
             abi.encode(pm, uint24(10_000), uint24(500), uint32(30), uint32(1 hours), uint32(1 days)),
@@ -86,7 +97,7 @@ abstract contract TideStack is Test, Deployers {
         spring = SpringHook(s);
         bondHook = CreatorBondHook(b);
         session = SessionHook(c);
-        launcher = new TideLauncher(pm, new TideTokenFactory(), new TideMigrator(pm, p, s, b, c), p, s, b, c);
+        launcher = new TideLauncher(pm, new TideTokenFactory(), new TideMigrator(pm, p, s, b, c, t), p, s, b, c, t);
         router = new TideRouter(pm);
         vm.prank(launcher.admin());
         launcher.setLaunchFee(0);

@@ -451,3 +451,12 @@ sub.zeros { font-size: 0.7em; vertical-align: -0.25em; margin: 0 1px; opacity: 0
 .order-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
 .order-row > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .order-row b, .order-row .up, .order-row .down { font-weight: 700; }
+
+/* tide pot */
+.pill.kind-4 { color: var(--amber); border-color: rgba(251, 191, 36, 0.55); }
+.pot { border: 1px solid rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.05); padding: 16px; }
+.pot-head { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.pot-amount { font-size: 44px; line-height: 1.1; color: var(--amber); }
+.pot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 14px; }
+.pot-grid label { display: block; font-size: 11px; color: var(--dim); text-transform: uppercase; }
+.pot-grid b { font-size: 16px; }

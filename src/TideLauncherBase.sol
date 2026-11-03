@@ -37,7 +37,8 @@ abstract contract TideLauncherBase {
         Patience,
         Spring,
         Bond,
-        Session
+        Session,
+        Pot
     }
 
     enum Action {
@@ -165,6 +166,7 @@ abstract contract TideLauncherBase {
     address public immutable springHook;
     address public immutable bondHook;
     address public immutable sessionHook;
+    address public immutable potHook;
 
     /// @notice Curates which quote assets launches may migrate to, and the route pools used to convert.
     address public admin;
@@ -190,12 +192,20 @@ abstract contract TideLauncherBase {
     /// @notice Increments with every migration proposal, so holder vetoes are counted per proposal.
     mapping(uint256 => uint32) public migrationRound;
 
-    constructor(IPoolManager _poolManager, address _patience, address _spring, address _bond, address _session) {
+    constructor(
+        IPoolManager _poolManager,
+        address _patience,
+        address _spring,
+        address _bond,
+        address _session,
+        address _pot
+    ) {
         poolManager = _poolManager;
         patienceHook = _patience;
         springHook = _spring;
         bondHook = _bond;
         sessionHook = _session;
+        potHook = _pot;
     }
 
     function _get(uint256 id) internal view returns (Launch storage) {
@@ -212,7 +222,7 @@ abstract contract TideLauncherBase {
         return PoolKey({
             currency0: Currency.wrap(tokenIs0 ? token : quote),
             currency1: Currency.wrap(tokenIs0 ? quote : token),
-            fee: kind == Kind.Bond ? BOND_POOL_FEE : LPFeeLibrary.DYNAMIC_FEE_FLAG,
+            fee: kind == Kind.Bond || kind == Kind.Pot ? BOND_POOL_FEE : LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: TICK_SPACING,
             hooks: IHooks(_hookFor(kind))
         });
@@ -230,6 +240,7 @@ abstract contract TideLauncherBase {
         if (k == Kind.Patience) return patienceHook;
         if (k == Kind.Spring) return springHook;
         if (k == Kind.Bond) return bondHook;
+        if (k == Kind.Pot) return potHook;
         return sessionHook;
     }
 
