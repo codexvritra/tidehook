@@ -108,7 +108,11 @@ contract SessionHook is TideFeeHook {
         onlyPoolManager
         returns (bytes4, BeforeSwapDelta, uint24)
     {
-        return (this.beforeSwap.selector, _feeBefore(key, params), currentFee() | LPFeeLibrary.OVERRIDE_FEE_FLAG);
+        return (
+            this.beforeSwap.selector,
+            _feeBefore(key, params),
+            _lpFee(key, currentFee()) | LPFeeLibrary.OVERRIDE_FEE_FLAG
+        );
     }
 
     // ---------------------------------------------------------------- admin

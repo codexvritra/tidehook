@@ -6,14 +6,14 @@ const HOOKS = [
   {
     name: "PatienceHook",
     addr: ADDR.patience,
-    title: "Pay less for waiting",
-    body: "Every pool has two lanes. Instant swaps pay 1%. A patient trader first posts a salted hash of their exact swap, waits, then reveals it: the fee falls linearly to 0.05% over an hour. Snipers who must act in the launch block pay the most, and that goes to LPs. The hash hides size and direction until reveal. Age counts from the pool's creation, so nobody can pre-commit a launch snipe.",
+    title: "Hide your swap until it lands",
+    body: "A trader can post a salted hash of their exact swap, wait, then reveal it, so size and direction stay hidden from bots until then. Age counts from the pool's creation, so nobody can pre-commit a launch snipe. On launchpad pools both lanes pay the same flat 2%. Outside the launchpad the hook's own fee falls from 1% to 0.05% for patient swaps.",
   },
   {
     name: "SpringHook",
     addr: ADDR.spring,
     title: "Fees as a restoring force",
-    body: "The pool tracks a time-weighted rest price. Near it, swaps pay 0.30%. Push the price further away and each tick costs more (Hooke's law), up to 5%. Swaps that pull it back pay 0.05%, as long as their price limit stops at the rest price. The rest point only moves with elapsed time, so many swaps in one block can't drag it.",
+    body: "On launchpad pools trades pay a flat 2%; the fee curve below applies only to pools outside the launchpad. The pool tracks a time-weighted rest price. Near it, swaps pay 0.30%. Push the price further away and each tick costs more (Hooke's law), up to 5%. Swaps that pull it back pay 0.05%, as long as their price limit stops at the rest price. The rest point only moves with elapsed time, so many swaps in one block can't drag it.",
   },
   {
     name: "CreatorBondHook",
@@ -25,7 +25,7 @@ const HOOKS = [
     name: "SessionHook",
     addr: ADDR.session,
     title: "Fees that follow the market clock",
-    body: "For pools paired with tokenized stocks: 0.05% in regular NYSE hours, 0.30% extended, 1% overnight, 2% at weekends and on holidays. Trading never halts. LPs are paid for the gap risk the real market can't arbitrage while it's closed. The admin can keep DST and holidays current, and fees are hard-capped at 5%.",
+    body: "On launchpad pools trades pay a flat 2%; this schedule applies only outside the launchpad. For pools paired with tokenized stocks: 0.05% in regular NYSE hours, 0.30% extended, 1% overnight, 2% at weekends and on holidays. Trading never halts. LPs are paid for the gap risk the real market can't arbitrage while it's closed. The admin can keep DST and holidays current, and fees are hard-capped at 5%.",
   },
 ];
 

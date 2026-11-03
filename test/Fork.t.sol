@@ -8,6 +8,8 @@ import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
@@ -120,6 +122,9 @@ contract ForkTest is Test, Deployers {
 
 /// @notice The full launch -> trade -> collect lifecycle on the live Robinhood Chain PoolManager.
 contract ForkLaunchTest is TideStack {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary for IPoolManager;
+
     IPoolManager constant PM = IPoolManager(0x8366a39CC670B4001A1121B8F6A443A643e40951);
 
     function setUp() public {
@@ -130,7 +135,7 @@ contract ForkLaunchTest is TideStack {
         vm.deal(address(this), 100 ether);
     }
 
-    function test_fork_launchTradeCollect_everyHook() public {
+    function test_fork_launchTrade_flat2pct_everyHook() public {
         for (uint8 k; k < 4; ++k) {
             TideLauncherBase.Kind kind = TideLauncherBase.Kind(k);
             (uint256 id, address token) = launcher.launch(_params(kind, address(0), ETH_START, 1_000));
@@ -145,8 +150,8 @@ contract ForkLaunchTest is TideStack {
             uint256 back = _sell(key, token, uint128(out / 2));
             assertGt(back, 0);
 
-            (uint256 fee0, uint256 fee1) = launcher.collectFees(id);
-            assertGt(fee0 + fee1, 0, "locked liquidity earned fees");
+            (uint256 g0, uint256 g1) = PM.getFeeGrowthGlobals(key.toId());
+            assertEq(g0 + g1, 0, "trades pay only the 2% launchpad tax");
             assertEq(ERC20(token).balanceOf(address(launcher)), 0);
         }
     }

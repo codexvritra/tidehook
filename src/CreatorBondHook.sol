@@ -205,7 +205,7 @@ contract CreatorBondHook is TideFeeHook {
         emit BondSlashed(id, msg.sender, burned);
     }
 
-    /// @dev Bond pools use a static LP fee; beforeSwap only charges launchpad fees.
+    /// @dev Bond pools use a static LP fee (0 for launchpad pools); beforeSwap only charges launchpad fees.
     function beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
         external
         override

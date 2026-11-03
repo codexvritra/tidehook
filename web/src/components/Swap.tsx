@@ -11,7 +11,6 @@ import { Spinner } from "./bits";
 
 type Props = { launch: Launch; asset: Asset; poolId: Hex; onTraded: () => void };
 
-const pctStr = (pips: number) => `${(pips / 10_000).toFixed(pips % 100 === 0 ? 2 : 3)}%`;
 
 /** Fee the hook will charge for this swap, read from the hook itself. */
 async function readFee(l: Launch, poolId: Hex, zeroForOne: boolean, limit: bigint): Promise<number> {
@@ -31,7 +30,6 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
   const [amount, setAmount] = useState("");
   const [slippage, setSlippage] = useState(1);
   const [lane, setLane] = useState<"fast" | "slow">("fast");
-  const [stopAtRest, setStopAtRest] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
   const buy = side === "buy";
@@ -51,21 +49,7 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
     }
   }, [amount, inDecimals]);
 
-  // Spring: is this swap restoring the price toward rest? Then offer the bounded-limit discount.
-  const [spring] = usePoll(
-    async () => {
-      if (l.kind !== 1) return null;
-      const [rest] = (await client.readContract({ address: l.key.hooks, abi: springHookAbi, functionName: "springs", args: [poolId] })) as [number, number];
-      const band = Number(await client.readContract({ address: l.key.hooks, abi: springHookAbi, functionName: "band" }));
-      const restLimit = await client.readContract({ address: l.key.hooks, abi: springHookAbi, functionName: "restLimit", args: [poolId] });
-      return { rest: Number(rest), band, restLimit };
-    },
-    15_000,
-    [poolId, l.kind],
-  );
-  const stretch = spring ? l.tick - spring.rest : 0;
-  const restoring = !!spring && Math.abs(stretch) > spring.band && (stretch < 0) !== zeroForOne;
-  const limit = l.kind === 1 && restoring && stopAtRest && spring ? spring.restLimit : limitFor(zeroForOne);
+  const limit = limitFor(zeroForOne); // flat 2%: no reason to cap a swap at the Spring rest price
 
   const [balIn] = usePoll(() => (session ? balanceOf(inAsset, session.account) : Promise.resolve(0n)), 12_000, [session?.account, inAsset]);
   const [allowance, , reloadAllowance] = usePoll(
@@ -199,11 +183,11 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
         <div className="lanes">
           <button className={lane === "fast" ? "on" : ""} onClick={() => setLane("fast")}>
             <b>Instant</b>
-            <span>1% fee, swaps now</span>
+            <span>flat 2%, swaps now</span>
           </button>
           <button className={lane === "slow" ? "on" : ""} onClick={() => setLane("slow")}>
             <b>Patient</b>
-            <span>commit now, swap later from 0.05%</span>
+            <span>flat 2%, size hidden until reveal</span>
           </button>
         </div>
       )}
@@ -246,8 +230,8 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
             <span className="mono">{buy ? "2% (1% creator · 1% platform)" : "2% (platform)"}</span>
           </div>
           <div>
-            <span className="dim">Hook LP fee</span>
-            <span className="mono">{quote ? pctStr(quote.fee) : "—"}</span>
+            <span className="dim">LP fee</span>
+            <span className="mono">none</span>
           </div>
           <div>
             <span className="dim">Price impact</span>
@@ -262,14 +246,6 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
         </div>
       )}
 
-      {l.kind === 1 && restoring && !slowLane && (
-        <label className="check">
-          <input type="checkbox" checked={stopAtRest} onChange={(e) => setStopAtRest(e.target.checked)} />
-          <span>
-            Stop at the rest price for the <b>0.05%</b> restoring fee. Without this, the swap could overshoot and pays the base fee.
-          </span>
-        </label>
-      )}
 
       <div className="row" style={{ alignItems: "center", margin: "6px 0 12px" }}>
         <span className="dim" style={{ fontSize: 13 }}>
@@ -323,7 +299,7 @@ export function Swap({ launch: l, asset, poolId, onTraded }: Props) {
           )}
         </button>
       )}
-      {slowLane && <p className="note">You'll post a hash of this exact swap. Nobody can see its size or direction until you reveal it. After 30s it can be revealed, and the fee falls to 0.05% over the next hour. It expires after 24h.</p>}
+      {slowLane && <p className="note">You'll post a hash of this exact swap. Nobody can see its size or direction until you reveal it. After 30s it can be revealed. It pays the same flat 2% and expires after 24h.</p>}
     </div>
   );
 }

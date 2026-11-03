@@ -98,6 +98,12 @@ abstract contract TideFeeHook is TideBaseHook, IUnlockCallback {
         initializerOf[key.toId()] = sender;
     }
 
+    /// @dev Launchpad pools pay exactly the launchpad tax (2%) and no LP fee on top of it.
+    ///      Pools nobody registered keep the hook's own fee logic.
+    function _lpFee(PoolKey calldata key, uint24 fee) internal view returns (uint24) {
+        return feeConfig[key.toId()].source == address(0) ? fee : 0;
+    }
+
     /// @dev Charges fees when the quote asset is the swap's specified currency.
     function _feeBefore(PoolKey calldata key, SwapParams calldata p) internal returns (BeforeSwapDelta) {
         FeeConfig memory c = feeConfig[key.toId()];

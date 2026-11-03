@@ -4,12 +4,13 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const USED = {
   TideLauncher: [
-    "launch", "getLaunch", "getLaunches", "launchCount", "collectFees", "poolIdOf", "launchIdPlusOne",
+    "launch", "getLaunch", "getLaunches", "launchCount", "poolIdOf", "launchIdPlusOne",
     "updateMetadata", "proposeMigration", "cancelMigration", "executeMigration", "pendingMigration", "pastPools",
     "routeFor", "quoteAllowed", "admin", "setQuoteAllowed", "setRoute",
     "RENAME_COOLDOWN", "MIGRATION_DELAY", "MIGRATION_WINDOW",
-    "feeRecipient", "launchFee", "setFeeRecipient", "setLaunchFee",
-    "Launched", "FeesCollected", "MetadataUpdated", "MigrationProposed", "MigrationCancelled", "Migrated", "QuoteAllowed", "RouteSet",
+    "feeRecipient", "launchFee", "setLaunchFee", "proposeFeeRecipient", "applyFeeRecipient", "pendingFeeRecipient", "pendingFeeRecipientReadyAt",
+    "proposeAdmin", "acceptAdmin", "pendingAdmin", "transferCreator", "acceptCreator", "pendingCreator", "MIN_CREATOR_VEST",
+    "Launched", "CreatorTransferred", "MetadataUpdated", "MigrationProposed", "MigrationCancelled", "Migrated", "QuoteAllowed", "RouteSet",
   ],
   TideRouter: ["swapExactIn", "quoteExactIn", "Trade"],
   PatienceHook: ["owed", "claim", "claimPlatform", "feeConfig", "commit", "commitmentOf", "commitments", "feeForAge", "ageOf", "initializedAt", "baseFee", "minFee", "minAge", "rampDuration", "maxAge"],

@@ -20,7 +20,7 @@ function useAssets(launches: Launch[] | undefined) {
   return assets;
 }
 
-const HOOK_LINE = ["1% → 0.05%", "0.05% – 5%", "1% · bonded", "0.05% – 2%"];
+const HOOK_LINE = ["flat 2%", "flat 2%", "flat 2% · bonded", "flat 2%"];
 
 function Chg({ v }: { v: number }) {
   if (!isFinite(v)) return <span className="chg flat">—</span>;

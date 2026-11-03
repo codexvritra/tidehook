@@ -13,10 +13,10 @@ import { formatEther } from "viem";
 import { Avatar, Spinner } from "../components/bits";
 
 const KIND_DETAIL = [
-  ["Instant swaps pay 1%", "Committed swaps fall to 0.05% after 1h", "No early commits for snipers"],
-  ["0.30% near the average price", "Up to 5% for pushing it further away", "0.05% for swaps that pull it back"],
-  ["1% pool fee", "Creator tokens vest only while price ≥ floor", "Anyone can burn them if the floor breaks"],
-  ["0.05% while NYSE is open", "0.30% in extended hours, 1% overnight", "2% at weekends and on holidays"],
+  ["Flat 2% per trade, no LP fee", "Optional commit-reveal swaps hide size", "No early commits for snipers"],
+  ["Flat 2% per trade, no LP fee", "Tracks an on-chain rest price", "Movable to another hook or pair later"],
+  ["Flat 2% per trade, no LP fee", "Only kind with a creator allocation (≥30d vest)", "Anyone can burn it if the floor breaks"],
+  ["Flat 2% per trade, no LP fee", "Built for tokenized-stock pairs", "Trades 24/7"],
 ];
 
 export function LaunchPage() {
@@ -65,13 +65,14 @@ export function LaunchPage() {
   }, [asset, mcapNum, floorX]);
 
   const isBond = kind === 2;
-  const bondInvalid = isBond && creatorPct === 0;
+  const allocPct = isBond ? creatorPct : 0; // only Bond launches may hold a (vested) creator allocation
+  const bondInvalid = isBond && (creatorPct === 0 || vestDays < 30);
   const errors = [
     !name.trim() && "name",
     !symbol.trim() && "symbol",
     !plan && "starting market cap",
     quoteMode === "erc20" && !asset && "quote token",
-    bondInvalid && "Bond needs a creator allocation",
+    bondInvalid && "Bond needs an allocation vesting at least 30 days",
   ].filter(Boolean) as string[];
 
   async function submit() {
@@ -92,7 +93,7 @@ export function LaunchPage() {
             kind,
             quote: asset.address,
             startTick: plan.startTick,
-            creatorBps: Math.round(creatorPct * 100),
+            creatorBps: Math.round(allocPct * 100),
             floorTick: plan.floorTick,
             vestDuration: BigInt(vestDays * 86400),
             grace: BigInt(graceHours * 3600),
@@ -208,13 +209,20 @@ export function LaunchPage() {
                 </label>
                 <input className="input mono" inputMode="decimal" value={mcap} onChange={(e) => setMcap(e.target.value)} />
               </div>
-              <div className="field">
-                <label>
-                  <span>Your allocation</span>
-                  <span className="mono">{creatorPct}%</span>
-                </label>
-                <input type="range" min={0} max={20} step={1} value={creatorPct} onChange={(e) => setCreatorPct(Number(e.target.value))} aria-label="Creator allocation" style={{ ["--p" as string]: `${(creatorPct / 20) * 100}%` }} />
-              </div>
+              {isBond ? (
+                <div className="field">
+                  <label>
+                    <span>Your allocation (vested)</span>
+                    <span className="mono">{creatorPct}%</span>
+                  </label>
+                  <input type="range" min={1} max={20} step={1} value={creatorPct} onChange={(e) => setCreatorPct(Number(e.target.value))} aria-label="Creator allocation" style={{ ["--p" as string]: `${(creatorPct / 20) * 100}%` }} />
+                </div>
+              ) : (
+                <div className="field">
+                  <label>Your allocation</label>
+                  <p className="note" style={{ margin: 0 }}>None. 100% of supply goes into the pool, so there is no dev bag to dump. Want an allocation? Pick Bond: it vests for at least 30 days.</p>
+                </div>
+              )}
             </div>
 
             {isBond && (
@@ -232,7 +240,7 @@ export function LaunchPage() {
                   </div>
                   <div className="field">
                     <label>Vesting (days)</label>
-                    <input className="input mono" type="number" min={1} max={365} value={vestDays} onChange={(e) => setVestDays(Math.max(1, Number(e.target.value) || 1))} />
+                    <input className="input mono" type="number" min={30} max={365} value={vestDays} onChange={(e) => setVestDays(Math.max(30, Number(e.target.value) || 30))} />
                   </div>
                   <div className="field">
                     <label>Grace (hours)</label>
@@ -266,17 +274,17 @@ export function LaunchPage() {
             <dt>Supply</dt>
             <dd className="mono">1,000,000,000</dd>
             <dt>Locked liquidity</dt>
-            <dd className="mono">{fmtNum(1e9 * (1 - creatorPct / 100))} tokens</dd>
+            <dd className="mono">{fmtNum(1e9 * (1 - allocPct / 100))} tokens</dd>
             <dt>Your allocation</dt>
             <dd className="mono">
-              {fmtNum(1e9 * (creatorPct / 100))} {isBond ? "(bonded)" : "(sent to you)"}
+              {allocPct ? `${fmtNum(1e9 * (allocPct / 100))} (bonded, vesting)` : "none"}
             </dd>
             <dt>Start market cap</dt>
             <dd className="mono">{plan ? `${fmtNum(plan.actualMcap)} ${asset?.symbol}` : "—"}</dd>
             <dt>Start price</dt>
             <dd className="mono">{plan ? `${(plan.actualMcap / 1e9).toExponential(3)} ${asset?.symbol}` : "—"}</dd>
-            <dt>Hook LP fee</dt>
-            <dd>{["1% → 0.05%", "0.05%–5%", "1%", "0.05%–2%"][kind]}</dd>
+            <dt>LP fee</dt>
+            <dd>none</dd>
             <dt>Buy tax</dt>
             <dd>1% to you + 1% platform</dd>
             <dt>Sell tax</dt>

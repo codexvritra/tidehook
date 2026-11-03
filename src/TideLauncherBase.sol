@@ -121,6 +121,10 @@ abstract contract TideLauncherBase {
     event FeeRecipientSet(address feeRecipient);
     event LaunchFeeSet(uint256 launchFee);
     event LpFeesRouted(uint256 indexed id, uint256 quoteToPlatform, uint256 tokenBurned);
+    event AdminProposed(address indexed admin, uint64 readyAt);
+    event FeeRecipientProposed(address indexed feeRecipient, uint64 readyAt);
+    event CreatorTransferProposed(uint256 indexed id, address indexed to);
+    event CreatorTransferred(uint256 indexed id, address indexed from, address indexed to);
 
     error NotPoolManager();
     error NotCreator();
@@ -136,11 +140,18 @@ abstract contract TideLauncherBase {
     error PoolExists();
     error PriceDrift(int256 drift);
     error Slippage(uint256 out, uint256 minOut);
+    error NotReady(uint256 readyAt);
 
     uint256 public constant SUPPLY = 1_000_000_000e18;
     int24 public constant TICK_SPACING = 200;
-    uint24 public constant BOND_POOL_FEE = 10_000; // 1% static fee for Bond pools
+    uint24 public constant BOND_POOL_FEE = 0; // launchpad pools charge only the 2% launchpad tax
     uint16 public constant MAX_CREATOR_BPS = 2_000; // 20%
+    /// @notice A creator allocation is only ever paid through a CreatorBondHook vest at least this long:
+    ///         no launch hands its dev wallet a liquid bag it can dump on buyers.
+    uint64 public constant MIN_CREATOR_VEST = 30 days;
+    /// @notice Admin and platform wallet changes are announced on-chain and take effect after this delay.
+    uint256 public constant GOVERNANCE_DELAY = 2 days;
+    uint256 public constant MAX_LAUNCH_FEE = 0.01 ether;
     address public constant BURN = 0x000000000000000000000000000000000000dEaD;
     uint256 public constant RENAME_COOLDOWN = 1 days;
     uint256 public constant MIGRATION_DELAY = 1 days;
@@ -168,6 +179,13 @@ abstract contract TideLauncherBase {
     mapping(address => uint256) public launchIdPlusOne;
     mapping(uint256 => Migration) public pendingMigration;
     mapping(uint256 => PoolId[]) internal _pastPools;
+
+    address public pendingAdmin;
+    uint64 public pendingAdminReadyAt;
+    address public pendingFeeRecipient;
+    uint64 public pendingFeeRecipientReadyAt;
+    /// @notice Creator role transfers are two-step: the new wallet must accept.
+    mapping(uint256 => address) public pendingCreator;
 
     constructor(IPoolManager _poolManager, address _patience, address _spring, address _bond, address _session) {
         poolManager = _poolManager;

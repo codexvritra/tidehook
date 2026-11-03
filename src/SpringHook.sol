@@ -132,7 +132,7 @@ contract SpringHook is TideFeeHook {
         (, int24 tick,,) = poolManager.getSlot0(id);
         _relax(id, tick);
         uint24 fee = quoteFee(id, tick, params.zeroForOne, params.sqrtPriceLimitX96);
-        return (this.beforeSwap.selector, _feeBefore(key, params), fee | LPFeeLibrary.OVERRIDE_FEE_FLAG);
+        return (this.beforeSwap.selector, _feeBefore(key, params), _lpFee(key, fee) | LPFeeLibrary.OVERRIDE_FEE_FLAG);
     }
 
     /// @dev Moves the rest point toward `tick`, the price that has stood since the last update,

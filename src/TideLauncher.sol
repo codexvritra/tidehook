@@ -30,10 +30,11 @@ import {CreatorBondHook} from "./CreatorBondHook.sol";
 ///         2. initializes its pool against ETH or any ERC20 at the creator's start price,
 ///         3. seeds the whole public supply as single-sided liquidity reaching the v4 maximum price
 ///            (no market-cap ceiling, no graduation step, nothing to get stuck on), held here forever,
-///         4. bonds the creator's allocation in CreatorBondHook, or pays it out for other hooks.
+///         4. bonds the creator's allocation (optional, Bond launches only) in CreatorBondHook, vesting >= 30 days.
 ///
 ///         After launch the creator can:
-///         - collect the swap fees the locked liquidity earns,
+///         - claim 1% of every buy in ETH from the hook (trades pay exactly the 2% launchpad tax, no LP fee),
+///         - hand the launch to a new wallet (two-step),
 ///         - rename the token (name, symbol, image, description), at most once per RENAME_COOLDOWN,
 ///         - migrate the locked liquidity to a new pool with a different hook and/or pair. A v4 pool's
 ///           hook and currencies are fixed in its PoolKey, so "upgrading" either means moving liquidity.
@@ -118,23 +119,11 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
 
     function _payCreator(Launch storage l, LaunchParams calldata p, uint256 amount) internal {
         if (amount == 0) return;
-        if (p.kind == Kind.Bond) {
-            ERC20(l.token).safeApprove(bondHook, amount);
-            int24 floorTick = l.tokenIsCurrency0 ? -p.floorTick : p.floorTick;
-            CreatorBondHook(bondHook)
-                .bond(l.key, l.tokenIsCurrency0, uint128(amount), floorTick, p.vestDuration, p.grace, msg.sender);
-        } else {
-            ERC20(l.token).safeTransfer(msg.sender, amount);
-        }
-    }
-
-    /// @notice Anyone: route the LP fees earned by the locked liquidity. The quote side (ETH) goes to the
-    ///         platform wallet and the token side is burned.
-    function collectFees(uint256 id) external returns (uint256 amount0, uint256 amount1) {
-        _get(id);
-        (amount0, amount1) =
-            abi.decode(poolManager.unlock(abi.encode(Action.Collect, abi.encode(id))), (uint256, uint256));
-        emit FeesCollected(id, amount0, amount1);
+        // _validate allows an allocation only on Bond launches: it vests and is slashable, never paid out liquid.
+        ERC20(l.token).safeApprove(bondHook, amount);
+        int24 floorTick = l.tokenIsCurrency0 ? -p.floorTick : p.floorTick;
+        CreatorBondHook(bondHook)
+            .bond(l.key, l.tokenIsCurrency0, uint128(amount), floorTick, p.vestDuration, p.grace, msg.sender);
     }
 
     /// @notice Rename the token and update its listing. The ERC20 `name()`/`symbol()` change on-chain.
@@ -199,30 +188,44 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
     }
 
     function setQuoteAllowed(address quote, bool allowed) external {
-        if (msg.sender != admin) revert NotAdmin();
+        _onlyAdmin();
         quoteAllowed[quote] = allowed;
         emit QuoteAllowed(quote, allowed);
     }
 
     /// @notice Register the canonical v4 pool used to convert between its two currencies during migrations.
     function setRoute(PoolKey calldata key) external {
-        if (msg.sender != admin) revert NotAdmin();
+        _onlyAdmin();
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
         if (sqrtPriceX96 == 0) revert BadParams("route not initialized");
         _routes[_pairKey(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1))] = key;
         emit RouteSet(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1), key.toId());
     }
 
-    function setFeeRecipient(address wallet) external {
-        if (msg.sender != admin) revert NotAdmin();
+    /// @notice Announce a new platform wallet. Anyone can apply it after GOVERNANCE_DELAY; re-proposing replaces
+    ///         the pending one. A leaked admin key can't silently redirect fees: the switch is public for 2 days.
+    function proposeFeeRecipient(address wallet) external {
+        _onlyAdmin();
         if (wallet == address(0)) revert BadParams("wallet");
+        pendingFeeRecipient = wallet;
+        uint64 readyAt = uint64(block.timestamp + GOVERNANCE_DELAY);
+        pendingFeeRecipientReadyAt = readyAt;
+        emit FeeRecipientProposed(wallet, readyAt);
+    }
+
+    function applyFeeRecipient() external {
+        address wallet = pendingFeeRecipient;
+        if (wallet == address(0)) revert BadParams("none");
+        _ready(pendingFeeRecipientReadyAt);
         feeRecipient = wallet;
+        delete pendingFeeRecipient;
+        delete pendingFeeRecipientReadyAt;
         emit FeeRecipientSet(wallet);
     }
 
     function setLaunchFee(uint256 fee) external {
-        if (msg.sender != admin) revert NotAdmin();
-        if (fee > 1 ether) revert BadParams("fee");
+        _onlyAdmin();
+        if (fee > MAX_LAUNCH_FEE) revert BadParams("fee");
         launchFee = fee;
         emit LaunchFeeSet(fee);
     }
@@ -233,17 +236,56 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         if (!ok) revert EthTransferFailed();
     }
 
-    function setAdmin(address newAdmin) external {
+    /// @notice Two-step, delayed admin handover: the new admin accepts after GOVERNANCE_DELAY
+    ///         (a typo can't brick the admin, a leaked key can't take over unseen). address(0) cancels.
+    function proposeAdmin(address newAdmin) external {
+        _onlyAdmin();
+        pendingAdmin = newAdmin;
+        uint64 readyAt = uint64(block.timestamp + GOVERNANCE_DELAY);
+        pendingAdminReadyAt = readyAt;
+        emit AdminProposed(newAdmin, readyAt);
+    }
+
+    function acceptAdmin() external {
+        if (msg.sender != pendingAdmin) revert NotAdmin();
+        _ready(pendingAdminReadyAt);
+        admin = msg.sender;
+        delete pendingAdmin;
+        delete pendingAdminReadyAt;
+        emit AdminSet(msg.sender);
+    }
+
+    /// @notice Creator: hand the launch (fee rights, rename, migration) to a new wallet, which must accept.
+    ///         address(0) cancels. Lets a creator move off a compromised or shared wallet.
+    function transferCreator(uint256 id, address to) external {
+        _creatorOf(id);
+        pendingCreator[id] = to;
+        emit CreatorTransferProposed(id, to);
+    }
+
+    function acceptCreator(uint256 id) external {
+        Launch storage l = _get(id);
+        if (msg.sender != pendingCreator[id]) revert NotCreator();
+        address from = l.creator;
+        delete pendingCreator[id];
+        delete pendingMigration[id]; // the old creator's pending migration does not carry over
+        l.creator = msg.sender;
+        _registerFees(l.key, msg.sender, l.tokenIsCurrency0); // future 1% buy fees go to the new creator
+        emit CreatorTransferred(id, from, msg.sender);
+    }
+
+    function _onlyAdmin() internal view {
         if (msg.sender != admin) revert NotAdmin();
-        admin = newAdmin;
-        emit AdminSet(newAdmin);
+    }
+
+    function _ready(uint256 readyAt) internal view {
+        if (block.timestamp < readyAt) revert NotReady(readyAt);
     }
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
         (Action action, bytes memory inner) = abi.decode(data, (Action, bytes));
         if (action == Action.Seed) return _seed(inner);
-        if (action == Action.Collect) return _collect(abi.decode(inner, (uint256)));
         (uint256 id, Migration memory m, uint256 minQuoteOut) = abi.decode(inner, (uint256, Migration, uint256));
         (bool ok, bytes memory ret) =
             address(migrator).delegatecall(abi.encodeCall(TideMigrator.migrate, (id, m, minQuoteOut)));
@@ -265,26 +307,6 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         ERC20(Currency.unwrap(token)).safeTransfer(address(poolManager), owed);
         poolManager.settle();
         return "";
-    }
-
-    function _collect(uint256 id) internal returns (bytes memory) {
-        Launch storage l = _launches[id];
-        PoolKey memory key = l.key;
-        (uint256 a0, uint256 a1) = _poke(key, l.tickLower, l.tickUpper, _saltA(id));
-        if (l.bidLower != l.bidUpper) {
-            (uint256 b0, uint256 b1) = _poke(key, l.bidLower, l.bidUpper, _saltB(id));
-            a0 += b0;
-            a1 += b1;
-        }
-        _routeLpFees(id, key, l.tokenIsCurrency0, a0, a1);
-        return abi.encode(a0, a1);
-    }
-
-    function _poke(PoolKey memory key, int24 lower, int24 upper, bytes32 salt) internal returns (uint256, uint256) {
-        (BalanceDelta d,) = poolManager.modifyLiquidity(
-            key, ModifyLiquidityParams({tickLower: lower, tickUpper: upper, liquidityDelta: 0, salt: salt}), ""
-        );
-        return (_pos(d.amount0()), _pos(d.amount1()));
     }
 
     function launchCount() external view returns (uint256) {
@@ -340,7 +362,11 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         {
             revert BadParams("startTick");
         }
-        if (p.kind == Kind.Bond && (p.creatorBps == 0 || p.vestDuration == 0)) revert BadParams("bond");
+        if (p.kind == Kind.Bond) {
+            if (p.creatorBps == 0 || p.vestDuration < MIN_CREATOR_VEST) revert BadParams("bond");
+        } else if (p.creatorBps != 0) {
+            revert BadParams("creatorBps"); // creator allocations must be bonded and vested
+        }
     }
 
     function _validateMeta(

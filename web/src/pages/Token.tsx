@@ -10,7 +10,7 @@ import { Avatar, KindBadge, Price, Spinner } from "../components/bits";
 import { PriceChart } from "../components/Chart";
 import { BondPanel, PatiencePanel, SessionPanel, SpringPanel } from "../components/HookPanels";
 import { Swap } from "../components/Swap";
-import { ManagePanel, PendingBanner } from "../components/Manage";
+import { CreatorTransfer, ManagePanel, PendingBanner } from "../components/Manage";
 import { EarningsPanel } from "../components/Earnings";
 import { Copy } from "../components/ui";
 
@@ -234,6 +234,7 @@ export function TokenPage({ id }: { id: number }) {
           {isCreator && <EarningsPanel asset={asset} mode="creator" />}
 
           {isCreator && <ManagePanel launch={l} pending={pending ?? null} onChanged={refresh} />}
+          <CreatorTransfer launch={l} onChanged={refresh} />
 
 
           {l.description && (

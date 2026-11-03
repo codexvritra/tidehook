@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import type { Address } from "viem";
+import { isAddress, type Address } from "viem";
 import { tideLauncherAbi } from "../lib/abis";
 import { useApp } from "../lib/appContext";
-import { ADDR } from "../lib/chain";
+import { ADDR, client } from "../lib/chain";
 import { KINDS, readAllowedQuotes, readAsset, usePoll, type Asset, type Launch, type Pending } from "../lib/data";
 import { fmtDuration } from "../lib/format";
 import { errMsg, sendTx } from "../lib/tx";
@@ -168,6 +168,68 @@ export function ManagePanel({ launch: l, pending, onChanged }: { launch: Launch;
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+/** Two-step creator handover: the creator names a wallet, that wallet accepts. Moves future fees, rename and migration rights. */
+export function CreatorTransfer({ launch: l, onChanged }: { launch: Launch; onChanged: () => void }) {
+  const { session, toast } = useApp();
+  const [pending, , reload] = usePoll(
+    () => client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "pendingCreator", args: [BigInt(l.id)] }),
+    30_000,
+    [l.id],
+  );
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const me = session?.account.toLowerCase();
+  const isCreator = me === l.creator.toLowerCase();
+  const isPending = !!pending && pending !== ZERO && me === pending.toLowerCase();
+  if (!isCreator && !isPending) return null;
+
+  async function run(fn: string, args: readonly unknown[], ok: string) {
+    if (!session) return;
+    setBusy(true);
+    try {
+      await sendTx(session, { address: ADDR.launcher, abi: tideLauncherAbi, functionName: fn, args });
+      toast(ok);
+      reload();
+      onChanged();
+    } catch (e) {
+      toast(errMsg(e), "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <span className="tag">Creator wallet</span>
+      </div>
+      {isPending ? (
+        <>
+          <p className="note" style={{ marginTop: 0 }}>You were offered this launch. Accepting moves future 1% buy fees, rename and migration rights to you.</p>
+          <button className="btn primary block" disabled={busy} onClick={() => run("acceptCreator", [BigInt(l.id)], "You are now the creator.")}>
+            {busy ? <Spinner /> : "Accept creator role"}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="note" style={{ marginTop: 0 }}>
+            Hand the launch to another wallet (for example a multisig). It must accept. Fees you already earned stay claimable by you.
+            {pending && pending !== ZERO ? ` Pending: ${pending.slice(0, 6)}…${pending.slice(-4)}.` : ""}
+          </p>
+          <div className="field">
+            <input className="input" placeholder="0x… new creator wallet" value={to} onChange={(e) => setTo(e.target.value.trim())} />
+          </div>
+          <button className="btn block" disabled={busy || !isAddress(to)} onClick={() => run("transferCreator", [BigInt(l.id), to as Address], "Offer sent. The new wallet must accept.")}>
+            {busy ? <Spinner /> : "Offer creator role"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

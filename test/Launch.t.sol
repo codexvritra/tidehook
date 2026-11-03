@@ -105,7 +105,7 @@ abstract contract TideStack is Test, Deployers {
             kind: kind,
             quote: quote,
             startTick: startTick,
-            creatorBps: bps,
+            creatorBps: kind == TideLauncherBase.Kind.Bond ? bps : 0, // only Bond launches may allocate
             floorTick: startTick - 6932, // 2x the launch price for an ETH-quoted token (token is currency1)
             vestDuration: 30 days,
             grace: 1 days
@@ -143,10 +143,10 @@ contract LaunchTest is TideStack {
         assertEq(l.creator, address(this));
         assertFalse(l.tokenIsCurrency0, "ETH is always currency0");
 
-        // Creator got 5%, the launcher keeps nothing, the pool holds the rest.
-        assertEq(ERC20(token).balanceOf(address(this)), 50_000_000e18);
+        // No liquid dev bag: the creator gets nothing, the launcher keeps nothing, the pool holds the supply.
+        assertEq(ERC20(token).balanceOf(address(this)), 0);
         assertEq(ERC20(token).balanceOf(address(launcher)), 0);
-        assertApproxEqRel(ERC20(token).balanceOf(address(manager)), 950_000_000e18, 1e12);
+        assertApproxEqRel(ERC20(token).balanceOf(address(manager)), 1_000_000_000e18, 1e12);
 
         (, int24 tick,,) = manager.getSlot0(l.key.toId());
         assertEq(tick, ETH_START);
@@ -197,7 +197,7 @@ contract LaunchTest is TideStack {
         );
     }
 
-    function test_patience_slowLaneThroughRouterPaysLess() public {
+    function test_patience_slowLaneThroughRouter_sameFlat2pct() public {
         (uint256 id,) = launcher.launch(_params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 0));
         PoolKey memory k = launcher.getLaunch(id).key;
         uint128 amount = 1 ether;
@@ -211,7 +211,8 @@ contract LaunchTest is TideStack {
         uint256 fast = _buy(k, amount, "");
         vm.revertToState(snap);
         uint256 slow = _buy(k, amount, abi.encode(salt));
-        assertGt(slow, fast, "commit-reveal buyer gets more tokens");
+        // Launchpad pools charge no LP fee, so both lanes pay exactly the 2% tax; the reveal path still works.
+        assertEq(slow, fast, "flat 2% for everyone");
     }
 
     function test_bond_creatorAllocationEscrowed_claimAfterFloorHolds() public {
@@ -257,26 +258,17 @@ contract LaunchTest is TideStack {
         bondHook.slash(l.key);
     }
 
-    function test_collectFees_lpFeesToPlatformInEth_tokenSideBurned() public {
-        address creator = address(0xFEE5);
-        vm.prank(creator);
-        (uint256 id, address token) = launcher.launch(_params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 500));
-        PoolKey memory k = launcher.getLaunch(id).key;
-
-        uint256 bought = _buy(k, 5 ether, "");
-        _sell(k, token, uint128(bought / 2));
-
-        address platform = launcher.feeRecipient();
-        uint256 platformEth = platform.balance;
-        uint256 burnedBefore = ERC20(token).balanceOf(launcher.BURN());
-        vm.prank(address(0xA11CE)); // anyone can trigger it; nobody but the platform/burn receives anything
-        (uint256 fee0, uint256 fee1) = launcher.collectFees(id);
-        assertGt(fee0, 0, "ETH-side LP fees");
-        assertGt(fee1, 0, "token-side LP fees");
-        assertEq(platform.balance - platformEth, fee0, "ETH LP fees to the platform wallet");
-        assertEq(ERC20(token).balanceOf(launcher.BURN()) - burnedBefore, fee1, "token LP fees burned");
-        assertEq(creator.balance, 0);
-        assertEq(ERC20(token).balanceOf(address(0xA11CE)), 0);
+    function test_noLpFee_tradesPayOnlyTheLaunchpadTax() public {
+        for (uint8 k; k < 4; ++k) {
+            uint16 bps = k == uint8(TideLauncherBase.Kind.Bond) ? 500 : 0;
+            (uint256 id, address token) = launcher.launch(_params(TideLauncherBase.Kind(k), address(0), ETH_START, bps));
+            PoolKey memory key = launcher.getLaunch(id).key;
+            uint256 bought = _buy(key, 5 ether, "");
+            vm.warp(block.timestamp + 60);
+            _sell(key, token, uint128(bought / 2));
+            (uint256 g0, uint256 g1) = manager.getFeeGrowthGlobals(key.toId());
+            assertEq(g0 + g1, 0, "no LP fee on top of the 2% launchpad tax");
+        }
     }
 
     function test_session_erc20QuotedLaunch_bothOrientations() public {
@@ -323,8 +315,20 @@ contract LaunchTest is TideStack {
         vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "startTick"));
         launcher.launch(p);
 
-        p = _params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 2_001);
+        p = _params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 2_001);
         vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "creatorBps"));
+        launcher.launch(p);
+
+        // A liquid creator allocation (the dev-wallet bag Ignition's team member dumped) is impossible:
+        // allocations exist only on Bond launches, vesting at least 30 days.
+        p = _params(TideLauncherBase.Kind.Patience, address(0), ETH_START, 0);
+        p.creatorBps = 500;
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "creatorBps"));
+        launcher.launch(p);
+
+        p = _params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 500);
+        p.vestDuration = 29 days;
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "bond"));
         launcher.launch(p);
 
         p = _params(TideLauncherBase.Kind.Bond, address(0), ETH_START, 0);

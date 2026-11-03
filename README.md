@@ -62,8 +62,9 @@ are hard-capped at 5%.
 2. Initializes a v4 pool against ETH or any ERC20, at the creator's start price.
 3. Adds every public token as **single-sided liquidity starting at the launch price**, owned by the launcher
    forever. It cannot be removed.
-4. Bond pools: escrows the creator's share in CreatorBondHook. Other pools: sends it to the creator (max 20%).
-5. Rounding dust is burned. The creator calls `collectFees(id)` to collect the position's swap fees.
+4. Bond pools only: escrows the creator's share (max 20%) in CreatorBondHook, vesting at least 30 days. Every other
+   launch puts 100% of supply in the pool, so there is never a liquid dev bag.
+5. Rounding dust is burned.
 
 Launch prices are given in one fixed orientation (quote as currency0). The launcher flips them when the new token
 sorts first, so the frontend never has to predict the token's address.
@@ -76,16 +77,19 @@ sorts first, so the frontend never has to predict the token's address.
 | Buy tax | 1% of the ETH spent | token creator |
 | Buy tax | 1% of the ETH spent | platform wallet |
 | Sell tax | 2% of the ETH received | platform wallet |
-| LP fees earned by the locked liquidity | the hook's fee (varies by hook) | ETH side → platform wallet, token side → burned |
+| LP fee | none: launchpad pools charge 0% LP fee | — |
 
-So across a $100 buy and a $100 sell, the creator earns $1 and the platform $3, plus LP fees.
+So every trade costs exactly 2%. Across a $100 buy and a $100 sell, the creator earns $1 and the platform $3.
 
 The buy and sell taxes are enforced **inside the v4 hooks** (`TideFeeHook`) with swap return-deltas, so trading through
 any router or aggregator pays them. They are charged in the pool's quote asset: ETH for ETH pairs, or the quote token
 for ERC20 pairs, never the launched token. Fees accrue as ERC-6909 claims in the PoolManager, so no ETH moves
 mid-swap and a payee that rejects ETH can never block trading. Creators claim from their token page (`claim`), and anyone can push
-platform fees to the platform wallet (`claimPlatform`). The admin sets the platform wallet (`setFeeRecipient`) and
-the launch fee (`setLaunchFee`; the Deploy page converts $3 at the current ETH price).
+platform fees to the platform wallet (`claimPlatform`). The admin proposes a new platform wallet (`proposeFeeRecipient`),
+which anyone can apply after a public 2-day delay (`applyFeeRecipient`), and sets the launch fee (`setLaunchFee`, capped at
+0.01 ETH; the Deploy page converts $3 at the current ETH price). Admin handover is two-step and delayed too
+(`proposeAdmin` → `acceptAdmin` after 2 days), and a creator can hand a launch to a new wallet (`transferCreator` →
+`acceptCreator`), which moves future fees, rename and migration rights.
 
 ## After launch: no cap, rename, upgrade
 
@@ -182,3 +186,18 @@ lib/            Uniswap v4 (git submodule)
 
 After changing a contract: `forge fmt` → `forge build` → `node web/scripts/abis.mjs` →
 `node web/scripts/deployments.mjs`, in that order. Formatting changes the bytecode metadata and so the addresses.
+
+## Lessons from Ignition, applied
+
+Ignition (another Robinhood Chain launchpad) published its own incidents and fixes. Tidehook avoids each of them by design:
+
+| Ignition's problem | Tidehook |
+|---|---|
+| A team member holding the dev wallet sold 15M tokens; one person controlled the creator-fee wallet | No liquid creator allocation ever exists (Bond only, ≥30-day vest, slashable). Platform wallet and admin changes are public and delayed 2 days, and use a multisig as admin |
+| Launches couldn't move to a new owner until V3 | Two-step `transferCreator` / `acceptCreator` from day one |
+| Early fees were taken in the launched token (sell pressure) | Every fee is ETH or the quote asset, never the token |
+| Fixed-range liquidity gave old launches a price ceiling | Liquidity reaches the v4 max price; no cap, no graduation |
+| A curve that sold out could fail to graduate and get stuck | No bonding curve, nothing to graduate |
+| Owners could point a hook at their own trading code (until V17) | Migration only between the four audited-in-repo hooks; no arbitrary code |
+| Shaped liquidity could block buys (V9); Stock Mode reverts trades | No hook ever blocks a swap; selling is always possible |
+| Fee could differ per launch / decay | Exactly 2% on every trade, constants in code, no LP fee on top |

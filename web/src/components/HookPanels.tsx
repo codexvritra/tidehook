@@ -89,7 +89,7 @@ export function PatiencePanel({ launch: l, asset, poolId, onChanged }: P) {
       </div>
       {mine.length === 0 ? (
         <p className="muted" style={{ margin: 0 }}>
-          No commitments yet. Choose <b>Patient</b> in the swap box to commit to a buy or sell. Its size and direction stay hidden until you reveal it, and the fee falls from 1% to 0.05% over an hour.
+          No commitments yet. Choose <b>Patient</b> in the swap box to commit to a buy or sell. Its size and direction stay hidden until you reveal it, so bots can't front-run it. It pays the same flat 2%.
         </p>
       ) : (
         <ul className="commits">
@@ -180,7 +180,7 @@ export function SpringPanel({ launch: l, poolId }: P) {
           </div>
         </div>
       )}
-      <p className="note">The rest price is a time-weighted average that follows the market over about an hour. Swaps that push the price further from it pay more. Swaps that move it back pay 0.05% if they stop at the rest price.</p>
+      <p className="note">The rest price is a time-weighted average that follows the market over about an hour. On launchpad pools every swap pays the same flat 2%, so the rest price is informational.</p>
     </div>
   );
 }

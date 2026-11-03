@@ -78,7 +78,7 @@ export function EarningsPanel({ asset, mode }: { asset: Asset; mode: "creator" |
       <p className="note" style={{ marginTop: 0 }}>
         {mode === "creator"
           ? "1% of every buy of your coins, across all your launches, paid in ETH. Never in your token."
-          : "1% of every buy, 2% of every sell, plus LP fees, sent to the platform wallet in ETH."}
+          : "1% of every buy and 2% of every sell, sent to the platform wallet in ETH."}
       </p>
       <button className="btn primary block" disabled={busy || total === 0n} onClick={claimAll}>
         {busy ? <Spinner /> : mode === "creator" ? "Claim to my wallet" : "Send to platform wallet"}

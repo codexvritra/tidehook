@@ -64,7 +64,61 @@ contract FeesTest is TideStack {
         launcher.setLaunchFee(0);
         vm.prank(address(0xBAD));
         vm.expectRevert(TideLauncherBase.NotAdmin.selector);
-        launcher.setFeeRecipient(address(0xBAD));
+        launcher.proposeFeeRecipient(address(0xBAD));
+        vm.prank(address(0xBAD));
+        vm.expectRevert(TideLauncherBase.NotAdmin.selector);
+        launcher.proposeAdmin(address(0xBAD));
+        vm.prank(launcher.admin());
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.BadParams.selector, "fee"));
+        launcher.setLaunchFee(0.01 ether + 1);
+    }
+
+    function test_adminHandover_twoStepAndDelayed() public {
+        address oldAdmin = launcher.admin();
+        address next = address(0xAD2);
+        vm.prank(oldAdmin);
+        launcher.proposeAdmin(next);
+
+        vm.prank(address(0xBAD));
+        vm.expectRevert(TideLauncherBase.NotAdmin.selector);
+        launcher.acceptAdmin();
+        vm.prank(next);
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.NotReady.selector, block.timestamp + 2 days));
+        launcher.acceptAdmin();
+
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(next);
+        launcher.acceptAdmin();
+        assertEq(launcher.admin(), next);
+        assertEq(launcher.pendingAdmin(), address(0));
+    }
+
+    function test_creatorTransfer_movesFutureFees() public {
+        (uint256 id,, PoolKey memory key) = _launchAs(TideLauncherBase.Kind.Patience);
+        TideFeeHook hook = _hook(key);
+        _buy(key, 1 ether, "");
+        address next = address(0xC2);
+
+        vm.prank(address(0xBAD));
+        vm.expectRevert(TideLauncherBase.NotCreator.selector);
+        launcher.transferCreator(id, address(0xBAD));
+        vm.prank(CREATOR);
+        launcher.transferCreator(id, next);
+        vm.prank(address(0xBAD));
+        vm.expectRevert(TideLauncherBase.NotCreator.selector);
+        launcher.acceptCreator(id);
+        vm.prank(next);
+        launcher.acceptCreator(id);
+        assertEq(launcher.getLaunch(id).creator, next);
+
+        _buy(key, 1 ether, "");
+        assertEq(
+            hook.owed(CREATOR, ETH), 0.01 ether, "fees earned before the handover stay claimable by the old wallet"
+        );
+        assertEq(hook.owed(next, ETH), 0.01 ether, "new creator earns from then on");
+        vm.prank(CREATOR);
+        vm.expectRevert(TideLauncherBase.NotCreator.selector);
+        launcher.updateMetadata(id, "x", "X", "", "");
     }
 
     // ------------------------------------------------------------------ trading fees
@@ -156,7 +210,12 @@ contract FeesTest is TideStack {
         _buy(key, 1 ether, "");
         address newWallet = address(0x9A7F);
         vm.prank(launcher.admin());
-        launcher.setFeeRecipient(newWallet);
+        launcher.proposeFeeRecipient(newWallet);
+        vm.expectRevert(abi.encodeWithSelector(TideLauncherBase.NotReady.selector, block.timestamp + 2 days));
+        launcher.applyFeeRecipient();
+        vm.warp(block.timestamp + 2 days);
+        launcher.applyFeeRecipient(); // anyone can apply once the delay is over
+        assertEq(launcher.feeRecipient(), newWallet);
         _hook(key).claimPlatform(address(launcher), ETH);
         assertEq(newWallet.balance, 0.01 ether);
     }

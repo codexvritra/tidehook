@@ -146,6 +146,6 @@ contract PatienceHook is TideFeeHook {
             emit Redeemed(commitment, id, age, fee);
         }
 
-        return (this.beforeSwap.selector, _feeBefore(key, params), fee | LPFeeLibrary.OVERRIDE_FEE_FLAG);
+        return (this.beforeSwap.selector, _feeBefore(key, params), _lpFee(key, fee) | LPFeeLibrary.OVERRIDE_FEE_FLAG);
     }
 }

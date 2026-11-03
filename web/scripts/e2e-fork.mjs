@@ -4,7 +4,7 @@
 // It sends the exact CREATE2 deploy transactions the in-app Deploy page sends, then launches tokens
 // and trades through the router. Uses anvil's well-known dev account; refuses any non-local RPC.
 import { readFileSync } from "node:fs";
-import { createPublicClient, createWalletClient, decodeEventLog, http, parseEther, concat, encodeAbiParameters, keccak256 } from "viem";
+import { createPublicClient, createWalletClient, decodeEventLog, http, parseEther, concat, encodeAbiParameters, keccak256, numberToHex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 const RPC = process.env.FORK_RPC ?? "http://127.0.0.1:8546";
@@ -84,7 +84,7 @@ async function launch(kind, bps) {
         kind,
         quote: "0x0000000000000000000000000000000000000000",
         startTick: 196000,
-        creatorBps: bps,
+        creatorBps: kind === 2 ? bps : 0, // only Bond launches may hold a (vested) allocation
         floorTick: 196000 - 6932,
         vestDuration: 30n * 86400n,
         grace: 86400n,
@@ -113,8 +113,11 @@ for (const [kind, name] of [[0, "Patience"], [1, "Spring"], [2, "Bond"], [3, "Se
   await write({ ...R, functionName: "swapExactIn", args: [{ key, zeroForOne: false, amountIn: after / 2n, minOut: 1n, sqrtPriceLimitX96: 0n, hookData: "0x" }, account.address, 2n ** 40n] });
   ok(true, `${name}: sold half back for ETH`);
 
-  const sim = await pub.simulateContract({ account, ...L, functionName: "collectFees", args: [id] });
-  ok(sim.result[0] + sim.result[1] > 0n, `${name}: LP fees accrued for the platform (${sim.result[0]} wei ETH)`);
+  void id;
+  const poolId = keccak256(encodeAbiParameters([{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "int24" }, { type: "address" }], [key.currency0, key.currency1, key.fee, key.tickSpacing, key.hooks]));
+  const slot = BigInt(keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [poolId, 6n]))) + 1n;
+  const g0 = await pub.getStorageAt({ address: "0x8366a39CC670B4001A1121B8F6A443A643e40951", slot: numberToHex(slot, { size: 32 }) });
+  ok(BigInt(g0) === 0n, `${name}: no LP fee charged, trades pay only the 2% tax`);
 }
 
 console.log("3. Patience slow lane: commit, wait, reveal through the router");
@@ -135,7 +138,7 @@ console.log("3. Patience slow lane: commit, wait, reveal through the router");
   const hookData = encodeAbiParameters([{ type: "bytes32" }], [salt]);
   const { result: [, slowOut] } = await pub.simulateContract({ account, ...R, functionName: "quoteExactIn", args: [{ ...swap, hookData }] });
   await write({ ...R, functionName: "swapExactIn", args: [{ ...swap, hookData }, account.address, 2n ** 40n], value: amountIn });
-  ok(slowOut > fastOut, `slow lane got ${((Number(slowOut - fastOut) / Number(fastOut)) * 100).toFixed(2)}% more tokens than fast lane`);
+  ok(slowOut === fastOut, "slow lane reveals fine and pays the same flat 2% as the fast lane");
 }
 
 console.log("3b. Launchpad fees in ETH: buy 1% creator + 1% platform, sell 2% platform");
