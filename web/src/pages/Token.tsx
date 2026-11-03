@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits } from "viem";
 import { useApp } from "../lib/appContext";
-import { explorer, explorerTx } from "../lib/chain";
-import { KINDS, KIND_BLURB, balanceOf, readAsset, readLaunch, readPending, readRenames, readTrades, usePoll, type Asset } from "../lib/data";
+import { ADDR, POOL_MANAGER, explorer, explorerTx } from "../lib/chain";
+import { KINDS, KIND_BLURB, balanceOf, readAsset, readHolders, readLaunch, readPending, readRenames, readTrades, usePoll, type Asset, type Trade } from "../lib/data";
 import { short } from "../lib/format";
 import { poolIdOf } from "../lib/pool";
 import { fmtNum, marketCap, priceAtTick, tokenPrice } from "../lib/price";
 import { Avatar, KindBadge, Price, Spinner } from "../components/bits";
-import { PriceChart } from "../components/Chart";
+import { CandleChart } from "../components/CandleChart";
+import { useChainNow } from "../lib/wallet";
 import { BondPanel, PatiencePanel, SessionPanel, SpringPanel } from "../components/HookPanels";
 import { Swap } from "../components/Swap";
 import { CreatorTransfer, ManagePanel, PendingBanner } from "../components/Manage";
@@ -32,7 +33,10 @@ export function TokenPage({ id }: { id: number }) {
   const [myBal, , reloadBal] = usePoll(() => (session && launch ? balanceOf(launch.token, session.account) : Promise.resolve(0n)), 12_000, [session?.account, launch?.token]);
 
   const isCreator = !!session && !!launch && session.account.toLowerCase() === launch.creator.toLowerCase();
-  const [tab, setTab] = useState<"trades" | "hook">("trades");
+  const [tab, setTab] = useState<"trades" | "holders" | "traders" | "hook">("trades");
+  const [holders] = usePoll(() => (launch ? readHolders(launch.token, launch.createdBlock) : Promise.resolve([])), 30_000, [launch?.token]);
+  const now = useChainNow(5000);
+  const traders = useTraders(trades ?? [], asset?.decimals ?? 18);
   const [pending, , reloadPending] = usePoll(() => readPending(id), 20_000, [id, deploy?.ready]);
   const [renames] = usePoll(() => (launch ? readRenames(id, launch.createdBlock) : Promise.resolve([])), 60_000, [id, launch?.renamedAt]);
   const [pendingQuote, setPendingQuote] = useState("…");
@@ -69,8 +73,22 @@ export function TokenPage({ id }: { id: number }) {
   const price = tokenPrice(l.sqrtPriceX96, l.tokenIsCurrency0, asset.decimals);
   const startPrice = priceAtTick(l.tokenIsCurrency0 ? l.tickLower : l.tickUpper, l.tokenIsCurrency0, asset.decimals);
   const change = startPrice > 0 ? (price / startPrice - 1) * 100 : 0;
-  const points = [{ t: 0, p: startPrice }, ...(trades ?? []).map((t, i) => ({ t: i + 1, p: tokenPrice(t.sqrtPriceX96, l.tokenIsCurrency0, asset.decimals) }))];
-  const volume = (trades ?? []).reduce((s, t) => s + Number(formatUnits(t.quoteAmount, asset.decimals)), 0);
+  const q = (t: Trade) => Number(formatUnits(t.quoteAmount, asset.decimals));
+  const ticks = [
+    { time: l.createdAt, price: startPrice, volume: 0, buy: true },
+    ...(trades ?? []).map((t) => ({ time: Math.max(t.time, l.createdAt), price: tokenPrice(t.sqrtPriceX96, l.tokenIsCurrency0, asset.decimals), volume: q(t), buy: t.buy })),
+  ];
+  const vol24 = (trades ?? []).filter((t) => t.time > now - 86400).reduce((s, t) => s + q(t), 0);
+  const label = (a: string) => {
+    const x = a.toLowerCase();
+    if (x === POOL_MANAGER.toLowerCase()) return "Pool (locked liquidity)";
+    if (x === "0x000000000000000000000000000000000000dead") return "Burned";
+    if (x === ADDR.bond.toLowerCase()) return "Creator bond (vesting)";
+    if (x === l.creator.toLowerCase()) return `${short(a)} (creator)`;
+    if (session && x === session.account.toLowerCase()) return `${short(a)} (you)`;
+    return short(a);
+  };
+  const mcap = marketCap(price);
   const refresh = () => {
     reload();
     reloadTrades();
@@ -100,30 +118,33 @@ export function TokenPage({ id }: { id: number }) {
               {l.migrations > 0 && <span className="pill tide">Migrated ×{l.migrations}</span>}
             </h2>
             <div className="tbar-meta">
-              <span>
-                CA {short(l.token)} <Copy text={l.token} />
+              <span className="tag-b">
+                CA{" "}
+                <a href={explorer(l.token)} target="_blank" rel="noreferrer">
+                  {short(l.token)}
+                </a>{" "}
+                <Copy text={l.token} />
               </span>
-              <span>·</span>
-              <span>CREATED BY {isCreator ? "YOU" : short(l.creator)}</span>
-              <span>·</span>
-              <a href={explorer(l.token)} target="_blank" rel="noreferrer">
-                EXPLORER ↗
-              </a>
+              <span className="tag-b">
+                CREATED BY{" "}
+                <a href={explorer(l.creator)} target="_blank" rel="noreferrer">
+                  {isCreator ? "YOU" : short(l.creator)}
+                </a>
+              </span>
               {meta.x && (
-                <>
-                  <span>·</span>
-                  <a href={`https://x.com/${meta.x}`} target="_blank" rel="noreferrer noopener">
-                    X @{meta.x} ↗
-                  </a>
-                </>
+                <a className="soc" href={`https://x.com/${meta.x}`} target="_blank" rel="noreferrer noopener" title={`@${meta.x} on X`} aria-label="X">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                    <path d="M18.9 2H22l-6.8 7.8L23 22h-6.2l-4.8-6.3L6.4 22H3.3l7.3-8.3L1 2h6.3l4.4 5.8L18.9 2Zm-1.1 18h1.7L6.3 3.9H4.5L17.8 20Z" />
+                  </svg>
+                </a>
               )}
               {meta.website && (
-                <>
-                  <span>·</span>
-                  <a href={meta.website} target="_blank" rel="noreferrer noopener nofollow">
-                    {new URL(meta.website).hostname.replace(/^www\./, "").toUpperCase()} ↗
-                  </a>
-                </>
+                <a className="soc" href={meta.website} target="_blank" rel="noreferrer noopener nofollow" title={meta.website} aria-label="Website">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                  </svg>
+                </a>
               )}
             </div>
           </div>
@@ -144,46 +165,45 @@ export function TokenPage({ id }: { id: number }) {
           <div>
             <label>MCap</label>
             <b>
-              {fmtNum(marketCap(price))} {asset.symbol}
+              {fmtNum(mcap)} {asset.symbol}
             </b>
           </div>
           <div>
-            <label>Volume</label>
+            <label>24h Vol</label>
             <b>
-              {fmtNum(volume)} {asset.symbol}
+              {fmtNum(vol24)} {asset.symbol}
             </b>
-          </div>
-          <div>
-            <label>Trades</label>
-            <b>{trades ? trades.length : "…"}</b>
           </div>
           <div>
             <label>Liquidity</label>
             <b className="up">Locked ∞</b>
+          </div>
+          <div>
+            <label>Holders</label>
+            <b>{holders ? holders.length : "…"}</b>
+          </div>
+          <div>
+            <label>Taxes</label>
+            <b>2%/2%</b>
           </div>
         </div>
       </div>
 
       <div className="tgrid">
         <div className="tmain">
-          <div className="panel chart-panel">
-            <div className="chart-head">
-              <b>
-                {l.symbol}/{asset.symbol}
-              </b>
-              <span>Price per trade · from PoolManager swaps</span>
-              <span style={{ marginLeft: "auto" }}>
-                Launch <Price value={startPrice} />
-              </span>
-            </div>
-            <div className="chart-box">
-              <PriceChart points={points} symbol={l.symbol} />
-            </div>
+          <div className="chart-panel">
+            <CandleChart ticks={ticks} symbol={l.symbol} quote={asset.symbol} supply={1e9} />
           </div>
 
           <div className="tabs" role="tablist">
             <button className={tab === "trades" ? "on" : ""} onClick={() => setTab("trades")}>
               Txns {trades ? `(${trades.length})` : ""}
+            </button>
+            <button className={tab === "holders" ? "on" : ""} onClick={() => setTab("holders")}>
+              Holders {holders ? `(${holders.length})` : ""}
+            </button>
+            <button className={tab === "traders" ? "on" : ""} onClick={() => setTab("traders")}>
+              Traders {trades ? `(${traders.length})` : ""}
             </button>
             <button className={tab === "hook" ? "on" : ""} onClick={() => setTab("hook")}>
               {KINDS[l.kind]} hook
@@ -210,36 +230,126 @@ export function TokenPage({ id }: { id: number }) {
                 <table>
                   <thead>
                     <tr>
+                      <th>Age</th>
                       <th>Type</th>
                       <th>Price</th>
                       <th>{asset.symbol}</th>
                       <th>{l.symbol}</th>
-                      <th>Fee</th>
+                      <th>Trader</th>
                       <th>Tx</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[...trades]
                       .reverse()
-                      .slice(0, 60)
+                      .slice(0, 100)
                       .map((t) => (
-                        <tr key={t.tx + t.tokenAmount}>
+                        <tr key={t.tx + t.tokenAmount} className={t.buy ? "row-buy" : "row-sell"}>
+                          <td className="dim">{age(now - t.time)}</td>
                           <td className={t.buy ? "up" : "down"}>
                             <b>{t.buy ? "BUY" : "SELL"}</b>
                           </td>
                           <td className={t.buy ? "up" : "down"}>
                             <Price value={tokenPrice(t.sqrtPriceX96, l.tokenIsCurrency0, quoteDec)} />
                           </td>
-                          <td>{fmtNum(Number(formatUnits(t.quoteAmount, quoteDec)))}</td>
+                          <td className={t.buy ? "up" : "down"}>{fmtNum(q(t))}</td>
                           <td>{fmtNum(Number(formatUnits(t.tokenAmount, 18)))}</td>
-                          <td className="dim">{(t.fee / 10_000).toFixed(2)}%</td>
+                          <td>
+                            <a href={explorer(t.trader)} target="_blank" rel="noreferrer">
+                              {label(t.trader)}
+                            </a>
+                          </td>
                           <td>
                             <a href={explorerTx(t.tx)} target="_blank" rel="noreferrer">
-                              {short(t.tx)}
+                              {short(t.tx)} ↗
                             </a>
                           </td>
                         </tr>
                       ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {tab === "holders" && (
+            <div className="trades">
+              {!holders ? (
+                <p className="muted" style={{ padding: 16 }}>
+                  Loading…
+                </p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Holder</th>
+                      <th>Share</th>
+                      <th>{l.symbol}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holders.slice(0, 100).map((h, i) => {
+                      const pct = Number((h.amount * 1_000_000n) / 10n ** 27n) / 10_000;
+                      return (
+                        <tr key={h.address}>
+                          <td className="dim">{i + 1}</td>
+                          <td>
+                            <a href={explorer(h.address)} target="_blank" rel="noreferrer">
+                              {label(h.address)}
+                            </a>
+                          </td>
+                          <td>
+                            <span className="pct-bar" style={{ ["--w" as string]: `${Math.min(100, pct)}%` }}>
+                              {pct.toFixed(2)}%
+                            </span>
+                          </td>
+                          <td>{fmtNum(Number(formatUnits(h.amount, 18)))}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {tab === "traders" && (
+            <div className="trades">
+              {traders.length === 0 ? (
+                <p className="muted" style={{ padding: 16, margin: 0 }}>
+                  No traders yet.
+                </p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Trader</th>
+                      <th>Buys</th>
+                      <th>Sells</th>
+                      <th>Bought ({asset.symbol})</th>
+                      <th>Sold ({asset.symbol})</th>
+                      <th>Net ({asset.symbol})</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {traders.slice(0, 100).map((t) => (
+                      <tr key={t.address}>
+                        <td>
+                          <a href={explorer(t.address)} target="_blank" rel="noreferrer">
+                            {label(t.address)}
+                          </a>
+                        </td>
+                        <td className="up">{t.buys}</td>
+                        <td className="down">{t.sells}</td>
+                        <td>{fmtNum(t.bought)}</td>
+                        <td>{fmtNum(t.sold)}</td>
+                        <td className={t.sold - t.bought >= 0 ? "up" : "down"}>
+                          {t.sold - t.bought >= 0 ? "+" : ""}
+                          {fmtNum(t.sold - t.bought)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
@@ -259,7 +369,7 @@ export function TokenPage({ id }: { id: number }) {
           {l.description && (
             <div className="panel">
               <div className="panel-head">
-                <span className="tag">Bio</span>
+                <span className="tag">Description</span>
               </div>
               <p className="muted" style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap" }}>
                 {l.description}
@@ -272,9 +382,24 @@ export function TokenPage({ id }: { id: number }) {
               <span className="tag">Token info</span>
             </div>
             <dl className="kv">
+              <dt>24h Vol</dt>
+              <dd>
+                {fmtNum(vol24)} {asset.symbol}
+              </dd>
               <dt>MCap</dt>
               <dd>
-                {fmtNum(marketCap(price))} {asset.symbol}
+                {fmtNum(mcap)} {asset.symbol}
+              </dd>
+              <dt>FDV</dt>
+              <dd>
+                {fmtNum(mcap)} {asset.symbol}
+              </dd>
+              <dt>Holders</dt>
+              <dd>{holders ? holders.length : "…"}</dd>
+              <dt>Change</dt>
+              <dd className={change >= 0 ? "up" : "down"}>
+                {change >= 0 ? "+" : ""}
+                {change.toFixed(2)}%
               </dd>
               <dt>Launch MCap</dt>
               <dd>
@@ -298,8 +423,14 @@ export function TokenPage({ id }: { id: number }) {
               <dd className="up">Locked forever</dd>
               <dt>Paired with</dt>
               <dd>{asset.symbol}</dd>
-              <dt>Created</dt>
+              <dt>Create time</dt>
               <dd>{new Date(l.createdAt * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC</dd>
+              <dt>Creator</dt>
+              <dd>
+                <a href={explorer(l.creator)} target="_blank" rel="noreferrer">
+                  {short(l.creator)}
+                </a>
+              </dd>
             </dl>
             <p className="note" style={{ marginBottom: 0 }}>
               <b className="lime">{KINDS[l.kind]}:</b> {KIND_BLURB[l.kind]}
@@ -309,4 +440,32 @@ export function TokenPage({ id }: { id: number }) {
       </div>
     </div>
   );
+}
+
+function age(s: number): string {
+  if (s < 60) return `${Math.max(0, Math.floor(s))}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+/** Per-wallet buys/sells from the trade list, most active first. */
+function useTraders(trades: Trade[], decimals: number) {
+  return useMemo(() => {
+    const m = new Map<string, { address: string; buys: number; sells: number; bought: number; sold: number }>();
+    for (const t of trades) {
+      const k = t.trader.toLowerCase();
+      const e = m.get(k) ?? { address: t.trader, buys: 0, sells: 0, bought: 0, sold: 0 };
+      const v = Number(formatUnits(t.quoteAmount, decimals));
+      if (t.buy) {
+        e.buys++;
+        e.bought += v;
+      } else {
+        e.sells++;
+        e.sold += v;
+      }
+      m.set(k, e);
+    }
+    return [...m.values()].sort((a, b) => b.bought + b.sold - (a.bought + a.sold));
+  }, [trades, decimals]);
 }

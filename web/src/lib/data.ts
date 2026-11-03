@@ -172,6 +172,8 @@ const SWAP_EVENT = parseAbiItem(
 export type Trade = {
   tx: Hex;
   block: bigint;
+  time: number; // unix seconds (block timestamp)
+  trader: Address; // the wallet that traded through TideRouter, else the contract that called the PoolManager
   buy: boolean;
   tokenAmount: bigint;
   quoteAmount: bigint;
@@ -179,9 +181,29 @@ export type Trade = {
   fee: number;
 };
 
+const ROUTER_TRADE = parseAbiItem(
+  "event Trade(bytes32 indexed poolId, address indexed trader, bool zeroForOne, uint256 amountIn, uint256 amountOut)",
+);
+const blockTimes = new Map<bigint, number>();
+
+/** Block timestamps, cached forever (blocks never change). */
+async function timesOf(blocks: bigint[]): Promise<void> {
+  const missing = [...new Set(blocks)].filter((b) => !blockTimes.has(b));
+  for (let i = 0; i < missing.length; i += 25) {
+    const chunk = missing.slice(i, i + 25);
+    const got = await Promise.all(chunk.map((b) => client.getBlock({ blockNumber: b })));
+    got.forEach((b, j) => blockTimes.set(chunk[j], Number(b.timestamp)));
+  }
+}
+
 /** Every swap in a pool since launch, straight from PoolManager events (no indexer). */
 export async function readTrades(poolId: Hex, fromBlock: bigint, tokenIsCurrency0: boolean): Promise<Trade[]> {
-  const logs = await client.getLogs({ address: POOL_MANAGER, event: SWAP_EVENT, args: { id: poolId }, fromBlock, toBlock: "latest" });
+  const [logs, routed] = await Promise.all([
+    client.getLogs({ address: POOL_MANAGER, event: SWAP_EVENT, args: { id: poolId }, fromBlock, toBlock: "latest" }),
+    client.getLogs({ address: ADDR.router, event: ROUTER_TRADE, args: { poolId }, fromBlock, toBlock: "latest" }).catch(() => []),
+  ]);
+  const traderOf = new Map(routed.map((r) => [r.transactionHash!, r.args.trader!]));
+  await timesOf(logs.map((l) => l.blockNumber!));
   return logs.map((l) => {
     const a0 = l.args.amount0!;
     const a1 = l.args.amount1!;
@@ -192,6 +214,8 @@ export async function readTrades(poolId: Hex, fromBlock: bigint, tokenIsCurrency
     return {
       tx: l.transactionHash!,
       block: l.blockNumber!,
+      time: blockTimes.get(l.blockNumber!) ?? 0,
+      trader: traderOf.get(l.transactionHash!) ?? l.args.sender!,
       buy: tokenDelta > 0n, // the swapper received the token
       tokenAmount: abs(tokenDelta),
       quoteAmount: abs(quoteDelta),
@@ -199,6 +223,24 @@ export async function readTrades(poolId: Hex, fromBlock: bigint, tokenIsCurrency
       fee: Number(l.args.fee),
     };
   });
+}
+
+const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 amount)");
+export type Holder = { address: Address; amount: bigint };
+
+/** Token balances rebuilt from Transfer events, largest first (zero balances dropped). */
+export async function readHolders(token: Address, fromBlock: bigint): Promise<Holder[]> {
+  const logs = await client.getLogs({ address: token, event: TRANSFER, fromBlock, toBlock: "latest" });
+  const bal = new Map<string, bigint>();
+  for (const l of logs) {
+    const { from, to, amount } = l.args;
+    if (from && from !== ETH) bal.set(from.toLowerCase(), (bal.get(from.toLowerCase()) ?? 0n) - amount!);
+    if (to) bal.set(to.toLowerCase(), (bal.get(to.toLowerCase()) ?? 0n) + amount!);
+  }
+  return [...bal.entries()]
+    .filter(([a, v]) => v > 0n && a !== ETH)
+    .map(([a, v]) => ({ address: a as Address, amount: v }))
+    .sort((x, y) => (y.amount > x.amount ? 1 : y.amount < x.amount ? -1 : 0));
 }
 
 // ------------------------------------------------------------------ creator controls

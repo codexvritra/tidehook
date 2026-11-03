@@ -409,3 +409,25 @@ sub.zeros { font-size: 0.7em; vertical-align: -0.25em; margin: 0 1px; opacity: 0
 .tlinks { display: inline-flex; gap: 10px; }
 .tlinks a { color: var(--lime); text-decoration: none; }
 .tlinks a:hover { text-decoration: underline; }
+
+/* token page: flap-style terminal */
+.tag-b { color: var(--muted); }
+.tag-b::before { content: "[ "; color: var(--dim); }
+.tag-b::after { content: " ]"; color: var(--dim); }
+.tag-b a { color: var(--lime); text-decoration: underline; text-underline-offset: 2px; }
+.soc { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line-2); color: var(--muted); }
+.soc:hover { color: var(--lime); border-color: var(--lime); }
+.cchart { border-bottom: 1px solid var(--line); }
+.cchart-bar { display: flex; align-items: center; gap: 2px; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 11px; flex-wrap: wrap; }
+.cchart-bar button { background: none; border: 0; color: var(--muted); font: inherit; padding: 4px 7px; cursor: pointer; }
+.cchart-bar button:hover { color: var(--text); }
+.cchart-bar button.on { color: var(--lime); background: var(--lime-dim); }
+.cchart-sep { width: 1px; height: 14px; background: var(--line-2); margin: 0 8px; }
+.cchart-ohlc { margin-left: auto; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cchart-ohlc b { color: var(--text); font-weight: 500; }
+.cchart-box { position: relative; height: 420px; }
+.cchart-box .chart-empty { position: absolute; inset: 0; height: auto; z-index: 3; pointer-events: none; }
+.trades tr.row-buy td:first-child { box-shadow: inset 2px 0 0 var(--up); }
+.trades tr.row-sell td:first-child { box-shadow: inset 2px 0 0 var(--down); }
+.pct-bar { display: inline-block; min-width: 90px; padding: 1px 6px; background: linear-gradient(90deg, var(--lime-dim) var(--w), transparent var(--w)); }
+@media (max-width: 700px) { .cchart-box { height: 300px; } .cchart-ohlc { display: none; } }

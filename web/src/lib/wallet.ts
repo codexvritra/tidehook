@@ -85,7 +85,7 @@ async function syncOffset() {
 export function useChainNow(ms = 1000): number {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000) + offset);
   useEffect(() => {
-    syncOffset();
+    syncOffset().then(() => setNow(Math.floor(Date.now() / 1000) + offset));
     const id = setInterval(() => {
       syncOffset();
       setNow(Math.floor(Date.now() / 1000) + offset);

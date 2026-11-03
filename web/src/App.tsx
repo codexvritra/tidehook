@@ -139,7 +139,7 @@ export default function App() {
       <main>
         {route.page === "explore" && <Explore />}
         {route.page === "launch" && <LaunchPage />}
-        {route.page === "token" && <TokenPage id={route.id} />}
+        {route.page === "token" && <TokenPage key={route.id} id={route.id} />}
         {route.page === "deploy" && <Deploy />}
         {route.page === "about" && <About />}
       </main>

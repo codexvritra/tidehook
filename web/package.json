@@ -11,6 +11,7 @@
     "abis": "node scripts/abis.mjs"
   },
   "dependencies": {
+    "lightweight-charts": "^4.2.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "viem": "^2.21.55"
