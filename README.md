@@ -198,6 +198,6 @@ Ignition (another Robinhood Chain launchpad) published its own incidents and fix
 | Early fees were taken in the launched token (sell pressure) | Every fee is ETH or the quote asset, never the token |
 | Fixed-range liquidity gave old launches a price ceiling | Liquidity reaches the v4 max price; no cap, no graduation |
 | A curve that sold out could fail to graduate and get stuck | No bonding curve, nothing to graduate |
-| Owners could point a hook at their own trading code (until V17) | Migration only between the four audited-in-repo hooks; no arbitrary code |
+| Owners could point a hook at their own trading code (until V17) | Migration only between the four fixed Tidehook hooks; no arbitrary code |
 | Shaped liquidity could block buys (V9); Stock Mode reverts trades | No hook ever blocks a swap; selling is always possible |
 | Fee could differ per launch / decay | Exactly 2% on every trade, constants in code, no LP fee on top |
