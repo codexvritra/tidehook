@@ -14,6 +14,7 @@ import { Swap } from "../components/Swap";
 import { CreatorTransfer, ManagePanel, PendingBanner } from "../components/Manage";
 import { EarningsPanel } from "../components/Earnings";
 import { VetoPanel } from "../components/Veto";
+import { OrdersPanel } from "../components/Orders";
 import { Copy } from "../components/ui";
 import { useTokenMeta } from "../lib/media";
 import { useUsdPrices } from "../lib/usd";
@@ -363,6 +364,7 @@ export function TokenPage({ id }: { id: number }) {
 
         <aside className="tside">
           <Swap launch={l} asset={asset} poolId={poolId} onTraded={refresh} />
+          <OrdersPanel launch={l} asset={asset} poolId={poolId} onChanged={refresh} />
           <VetoPanel launch={l} pending={pending ?? null} onChanged={refresh} />
 
           {isCreator && <EarningsPanel asset={asset} mode="creator" />}

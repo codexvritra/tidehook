@@ -5,6 +5,7 @@
 import http from "node:http";
 import pg from "pg";
 import { createPublicClient, erc20Abi, http as rpcHttp, parseAbiItem } from "viem";
+import { startKeeper } from "./keeper.mjs";
 
 const RPC = process.env.RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
 const LAUNCHER = (process.env.LAUNCHER || "0xa566B45e69973578E043cB26c34EC1399e49205D").toLowerCase();
@@ -13,6 +14,8 @@ const POOL_MANAGER = "0x8366a39cc670b4001a1121b8f6a443a643e40951";
 const START_BLOCK = BigInt(process.env.START_BLOCK || "104967797"); // TideLauncher v2 deployment
 const CHUNK = BigInt(process.env.CHUNK || "5000");
 const PORT = Number(process.env.PORT || 8080);
+const ORDERS = (process.env.ORDERS ?? "0xd1F5Ce7A2BEBF60820879128367C77C75eB92033").toLowerCase();
+let keeper = null; // set once TideOrders is live
 const ETH = "0x0000000000000000000000000000000000000000";
 
 const rpc = createPublicClient({ transport: rpcHttp(RPC, { retryCount: 6, retryDelay: 1500, timeout: 30_000 }) });
@@ -267,7 +270,7 @@ async function stats() {
 }
 
 const routes = [
-  [/^\/health$/, async () => ({ ok: true, block: await getMeta("block"), head: await getMeta("head") })],
+  [/^\/health$/, async () => ({ ok: true, block: await getMeta("block"), head: await getMeta("head"), keeper: keeper && { address: keeper.address, balance: keeper.balance, active: keeper.active, fills: keeper.fills, slices: keeper.slices } })],
   [/^\/stats$/, stats],
   [
     /^\/launch\/(\d+)\/trades$/,
@@ -316,9 +319,19 @@ http
 await migrate();
 // A new launcher deployment has its own launch ids: start the index over instead of mixing them.
 if ((await getMeta("launcher")) !== LAUNCHER) {
-  await db.query("truncate launches, pools, trades, transfers, meta");
+  await db.query("truncate launches, pools, trades, transfers");
+  await db.query("delete from meta where k <> 'keeper_key'"); // never drop the keeper's wallet
   await db.query("insert into meta (k, v) values ('launcher', $1)", [LAUNCHER]);
   log(`fresh index for launcher ${LAUNCHER}`);
 }
 log(`indexing ${LAUNCHER} from block ${START_BLOCK} via ${RPC}`);
 follow();
+// The keeper starts as soon as TideOrders exists on-chain (checked every minute until then).
+(async function waitForOrders() {
+  for (let warned = false; ; ) {
+    const code = await rpc.getCode({ address: ORDERS }).catch(() => undefined);
+    if (code && code.length > 2) return void (keeper = await startKeeper({ rpc, rpcUrl: RPC, db, getMeta, log, orders: ORDERS }));
+    if (!warned) (warned = true), log(`TideOrders ${ORDERS} not deployed yet: keeper waiting`);
+    await new Promise((r) => setTimeout(r, 60_000));
+  }
+})();

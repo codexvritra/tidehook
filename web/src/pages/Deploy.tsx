@@ -27,6 +27,7 @@ const ROLE: Record<string, string> = {
   TideTokenFactory: "Deploys each launch's ERC20",
   TideMigrator: "Moves locked liquidity to a new hook or pair",
   TideRouter: "Swaps with quotes, slippage and refunds",
+  TideOrders: "Limit orders and DCA in every launch pool",
 };
 
 export function Deploy() {
@@ -84,7 +85,7 @@ export function Deploy() {
           Put tidehook on <em>Robinhood Chain.</em>
         </h2>
         <p className="section-lede">
-          Eight contracts go to fixed addresses through the standard CREATE2 deployer, so these
+          Nine contracts go to fixed addresses through the standard CREATE2 deployer, so these
           addresses are the same no matter who deploys. Each hook's address was mined so its last 14 bits match the
           permissions Uniswap v4 requires. Your wallet signs every transaction, and the site never sees a key.
         </p>

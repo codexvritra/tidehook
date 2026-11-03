@@ -87,6 +87,7 @@ const launcher = add(
   ),
 );
 const router = add("TideRouter", initCode("TideRouter", ["address"], [POOL_MANAGER]));
+const orders = add("TideOrders", initCode("TideOrders", ["address"], [POOL_MANAGER]));
 
 mkdirSync(new URL("../../deployments/", import.meta.url), { recursive: true });
 mkdirSync(new URL("../src/deploy/", import.meta.url), { recursive: true });
@@ -124,6 +125,7 @@ export const ADDR = {
   migrator: "${migrator}",
   launcher: "${launcher}",
   router: "${router}",
+  orders: "${orders}",
 } as const satisfies Record<string, Address>;
 `,
 );

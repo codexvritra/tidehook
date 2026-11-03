@@ -70,7 +70,9 @@ export async function readDeployment(): Promise<DeployState> {
   const names = Object.keys(ADDR) as (keyof typeof ADDR)[];
   const codes = await Promise.all(names.map((n) => client.getCode({ address: ADDR[n] })));
   const missing = names.filter((_, i) => !codes[i] || codes[i] === "0x");
-  return { ready: missing.length === 0, missing };
+  // Add-ons (TideOrders) never gate the launchpad: their panels hide until they are deployed.
+  const OPTIONAL: string[] = ["orders"];
+  return { ready: missing.every((n) => OPTIONAL.includes(n)), missing };
 }
 
 // ------------------------------------------------------------------ launches

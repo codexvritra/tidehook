@@ -18,6 +18,7 @@ const USED = {
   CreatorBondHook: ["getBond", "claim", "slash", "claimable", "slashable", "heldFor", "vested"],
   SessionHook: ["currentFee", "sessionAt", "fees", "schedule", "owner"],
   TideVeto: ["lock", "unlock", "status", "lockOf", "circulating", "VETO_BPS", "Locked", "Unlocked"],
+  TideOrders: ["placeLimit", "fill", "cancelLimit", "isFillable", "createDca", "execute", "cancelDca", "isDue", "getLimit", "getDca", "limitCount", "dcaCount", "LimitPlaced", "LimitClosed", "DcaCreated", "DcaExecuted", "DcaCancelled", "MIN_INTERVAL"],
   TideToken: ["balanceOf", "allowance", "approve", "decimals", "symbol", "name", "totalSupply"],
 };
 

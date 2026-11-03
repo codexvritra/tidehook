@@ -445,3 +445,9 @@ sub.zeros { font-size: 0.7em; vertical-align: -0.25em; margin: 0 1px; opacity: 0
 .veto-bar i { display: block; height: 100%; background: var(--down); }
 .linkish { background: none; border: 0; padding: 0; color: var(--lime); font: inherit; cursor: pointer; }
 .pill.down { color: var(--down); border-color: var(--down); }
+
+/* orders */
+.order-list { border-top: 1px solid var(--line); margin-top: 12px; }
+.order-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.order-row > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-row b, .order-row .up, .order-row .down { font-weight: 700; }

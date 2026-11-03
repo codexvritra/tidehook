@@ -10,4 +10,5 @@ export const ADDR = {
   migrator: "0x988F6319bd2518B8D2103598ce091B8eF2FAc68d",
   launcher: "0xa566B45e69973578E043cB26c34EC1399e49205D",
   router: "0x026b7469bE095D42D732A390E93c168992F8bd73",
+  orders: "0xd1F5Ce7A2BEBF60820879128367C77C75eB92033",
 } as const satisfies Record<string, Address>;

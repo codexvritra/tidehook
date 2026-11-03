@@ -220,3 +220,17 @@ A creator's hook or pair switch is announced 24h ahead. During that notice any h
 `TideVeto` against it; once locked tokens reach 10% of the circulating supply (everything outside the pool, the burn
 address and the creator bond) `executeMigration` reverts with `Vetoed`. Tokens unlock at any time, and every new
 proposal starts a fresh count. `web/scripts/veto-fork.mjs` runs it end to end on a mainnet fork.
+
+## Limit orders and DCA (TideOrders)
+
+`TideOrders` works with every launch pool and charges nothing of its own.
+
+- **Limit orders** are one-tick-spacing range positions just outside the price (take-profit above, buy-the-dip
+  below). When trades push the price through the range it fully converts; anyone can then `fill` it, which withdraws
+  it and pays the owner. Takers crossing the order pay the usual 2%; the maker pays nothing extra.
+- **DCA** escrows funds and swaps one slice per interval (min 60s, max 1000 slices). Anyone can `execute` a due
+  slice; a slice that can't fill in full inside the owner's worst-price limit reverts and waits.
+- **Keeper**: the indexer service closes filled orders and runs due slices. It generates its own gas-only wallet
+  (address at `/health`) and stays idle until that wallet holds at least 0.0002 ETH.
+
+`web/scripts/orders-fork.mjs` runs both on a mainnet fork.
