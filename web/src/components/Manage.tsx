@@ -23,7 +23,7 @@ export function PendingBanner({ pending, quoteSymbol }: { pending: Pending; quot
     <div className="banner moon" role="status">
       Migration scheduled: this pool moves to the <b>{KINDS[pending.kind]}</b> hook paired with <b>{quoteSymbol}</b>{" "}
       {left > 0 ? `in ${fmtDuration(left)}` : "now (the creator can execute it)"}. Price and liquidity carry over; open
-      Patience commitments on this pool won't.
+      Patience commitments on this pool won't. {left > 0 ? "Holders can veto it in the Holder veto panel." : ""}
     </div>
   );
 }
