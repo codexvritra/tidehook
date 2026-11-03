@@ -26,6 +26,9 @@ export const ETH: Address = "0x0000000000000000000000000000000000000000";
 
 export { ADDR };
 
+/** Optional tidehook indexer (indexer/ in the repo). Without it the app reads everything from the RPC. */
+export const INDEXER_URL: string = (import.meta.env.VITE_INDEXER_URL || "").replace(/\/$/, "");
+
 export const GITHUB_URL: string = import.meta.env.VITE_GITHUB_URL || "https://github.com/codexvritra/tidehook";
 
 export const explorer = (a: string) => `${robinhood.blockExplorers.default.url}/address/${a}`;

@@ -26,7 +26,7 @@ export function TokenPage({ id }: { id: number }) {
 
   const poolId = useMemo(() => (launch ? poolIdOf(launch.key) : undefined), [launch?.id, launch?.migrations]); // eslint-disable-line react-hooks/exhaustive-deps
   const [trades, , reloadTrades] = usePoll(
-    () => (launch && poolId ? readTrades(poolId, launch.createdBlock, launch.tokenIsCurrency0) : Promise.resolve([])),
+    () => (launch && poolId ? readTrades(poolId, launch.createdBlock, launch.tokenIsCurrency0, launch.id) : Promise.resolve([])),
     15_000,
     [poolId],
   );
@@ -34,7 +34,7 @@ export function TokenPage({ id }: { id: number }) {
 
   const isCreator = !!session && !!launch && session.account.toLowerCase() === launch.creator.toLowerCase();
   const [tab, setTab] = useState<"trades" | "holders" | "traders" | "hook">("trades");
-  const [holders] = usePoll(() => (launch ? readHolders(launch.token, launch.createdBlock) : Promise.resolve([])), 30_000, [launch?.token]);
+  const [holders] = usePoll(() => (launch ? readHolders(launch.token, launch.createdBlock, launch.id) : Promise.resolve([])), 30_000, [launch?.token]);
   const now = useChainNow(5000);
   const traders = useTraders(trades ?? [], asset?.decimals ?? 18);
   const [pending, , reloadPending] = usePoll(() => readPending(id), 20_000, [id, deploy?.ready]);

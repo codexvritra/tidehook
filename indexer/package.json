@@ -1,0 +1,20 @@
+{
+  "name": "tidehook-indexer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Follows the tidehook contracts on Robinhood Chain and serves launches, trades, holders and stats.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1",
+    "viem": "^2.21.55"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17"
+  }
+}

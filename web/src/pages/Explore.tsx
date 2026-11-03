@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { go, useApp } from "../lib/appContext";
 import { client } from "../lib/chain";
-import { KINDS, readAsset, readLaunches, usePoll, type Asset, type Launch } from "../lib/data";
+import { KINDS, readAsset, readLaunches, readStats, usePoll, type Asset, type Launch } from "../lib/data";
+import { formatUnits } from "viem";
 import { ago, short } from "../lib/format";
 import { fmtNum, marketCap, priceAtTick, tokenPrice } from "../lib/price";
 import { Avatar, KindBadge, Logo, Price } from "../components/bits";
@@ -20,7 +21,6 @@ function useAssets(launches: Launch[] | undefined) {
   return assets;
 }
 
-const HOOK_LINE = ["flat 2%", "flat 2%", "flat 2% · bonded", "flat 2%"];
 
 function Chg({ v }: { v: number }) {
   if (!isFinite(v)) return <span className="chg flat">—</span>;
@@ -35,7 +35,8 @@ export function Explore() {
   const assets = useAssets(launches);
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<number | null>(null);
-  const [sort, setSort] = useState<"new" | "mcap" | "gain">("new");
+  const [sort, setSort] = useState<"new" | "mcap" | "vol" | "gain">("new");
+  const [stats] = usePoll(readStats, 15_000, []);
   const [view, setView] = useState<"list" | "grid">("list");
 
   const rows = useMemo(() => {
@@ -43,15 +44,18 @@ export function Explore() {
       const a = assets[l.quote.toLowerCase()];
       const price = a ? tokenPrice(l.sqrtPriceX96, l.tokenIsCurrency0, a.decimals) : NaN;
       const start = a ? priceAtTick(l.tokenIsCurrency0 ? l.tickLower : l.tickUpper, l.tokenIsCurrency0, a.decimals) : NaN;
-      return { l, a, price, mcap: marketCap(price), chg: (price / start - 1) * 100 };
+      const st = stats?.get(l.id);
+      const vol = st && a ? Number(formatUnits(st.vol24, a.decimals)) : NaN;
+      return { l, a, price, mcap: marketCap(price), chg: (price / start - 1) * 100, vol, holders: st?.holders };
     });
     const needle = q.trim().toLowerCase();
     if (needle) r = r.filter(({ l }) => [l.name, l.symbol, l.token].some((s) => s.toLowerCase().includes(needle)));
     if (kind !== null) r = r.filter(({ l }) => l.kind === kind);
     if (sort === "mcap") r = [...r].sort((x, y) => (y.mcap || 0) - (x.mcap || 0));
     if (sort === "gain") r = [...r].sort((x, y) => (y.chg || -1e9) - (x.chg || -1e9));
+    if (sort === "vol") r = [...r].sort((x, y) => (y.vol || 0) - (x.vol || 0));
     return r;
-  }, [launches, assets, q, kind, sort]);
+  }, [launches, assets, q, kind, sort, stats]);
 
   return (
     <>
@@ -123,6 +127,7 @@ export function Explore() {
                 [
                   ["new", "New"],
                   ["mcap", "MCap"],
+                  ...(stats ? ([["vol", "24h Vol"]] as const) : []),
                   ["gain", "Gainers"],
                 ] as const
               ).map(([v, l]) => (
@@ -181,14 +186,15 @@ export function Explore() {
                     <th>MCap</th>
                     <th>Tax</th>
                     <th>Hook</th>
-                    <th>Hook fee</th>
+                    <th>24h Vol</th>
+                    <th>Holders</th>
                     <th>Created</th>
                     <th>Creator</th>
                     <th style={{ textAlign: "right" }}>Since launch</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ l, a, price, mcap, chg }) => (
+                  {rows.map(({ l, a, price, mcap, chg, vol, holders }) => (
                     <tr key={l.id} onClick={() => go(`/t/${l.id}`)}>
                       <td>
                         <a className="coin" href={`#/t/${l.id}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit" }}>
@@ -220,7 +226,8 @@ export function Explore() {
                       <td>
                         <KindBadge kind={l.kind} />
                       </td>
-                      <td className="dim">{HOOK_LINE[l.kind]}</td>
+                      <td>{isFinite(vol) ? <>{fmtNum(vol)} <span className="dim">{a?.symbol}</span></> : <span className="dim">—</span>}</td>
+                      <td>{holders ?? <span className="dim">—</span>}</td>
                       <td className="dim">{ago(l.createdAt)}</td>
                       <td className="dim">{short(l.creator)}</td>
                       <td style={{ textAlign: "right" }}>

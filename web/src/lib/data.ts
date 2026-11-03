@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { erc20Abi, parseAbiItem, type Address, type Hex } from "viem";
 import { tideLauncherAbi } from "./abis";
-import { ADDR, ETH, POOL_MANAGER, client } from "./chain";
+import { ADDR, ETH, INDEXER_URL, POOL_MANAGER, client } from "./chain";
 
 export type PoolKey = { currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address };
 
@@ -196,8 +196,35 @@ async function timesOf(blocks: bigint[]): Promise<void> {
   }
 }
 
-/** Every swap in a pool since launch, straight from PoolManager events (no indexer). */
-export async function readTrades(poolId: Hex, fromBlock: bigint, tokenIsCurrency0: boolean): Promise<Trade[]> {
+async function fromIndexer<T>(path: string): Promise<T | null> {
+  if (!INDEXER_URL) return null;
+  try {
+    const r = await fetch(INDEXER_URL + path, { signal: AbortSignal.timeout(6000) });
+    return r.ok ? ((await r.json()) as T) : null;
+  } catch {
+    return null; // indexer down: fall back to reading the chain
+  }
+}
+
+type IndexedTrade = { tx: Hex; block: string; time: number; trader: Address; buy: boolean; token_amount: string; quote_amount: string; sqrt_price: string };
+
+/** Every swap in a pool since launch: from the indexer when configured, else straight from PoolManager events. */
+export async function readTrades(poolId: Hex, fromBlock: bigint, tokenIsCurrency0: boolean, launchId?: number): Promise<Trade[]> {
+  if (launchId !== undefined) {
+    const rows = await fromIndexer<IndexedTrade[]>(`/launch/${launchId}/trades?pool=${poolId}`);
+    if (rows)
+      return rows.map((r) => ({
+        tx: r.tx,
+        block: BigInt(r.block),
+        time: r.time,
+        trader: r.trader,
+        buy: r.buy,
+        tokenAmount: BigInt(r.token_amount),
+        quoteAmount: BigInt(r.quote_amount),
+        sqrtPriceX96: BigInt(r.sqrt_price),
+        fee: 0,
+      }));
+  }
   const [logs, routed] = await Promise.all([
     client.getLogs({ address: POOL_MANAGER, event: SWAP_EVENT, args: { id: poolId }, fromBlock, toBlock: "latest" }),
     client.getLogs({ address: ADDR.router, event: ROUTER_TRADE, args: { poolId }, fromBlock, toBlock: "latest" }).catch(() => []),
@@ -229,7 +256,11 @@ const TRANSFER = parseAbiItem("event Transfer(address indexed from, address inde
 export type Holder = { address: Address; amount: bigint };
 
 /** Token balances rebuilt from Transfer events, largest first (zero balances dropped). */
-export async function readHolders(token: Address, fromBlock: bigint): Promise<Holder[]> {
+export async function readHolders(token: Address, fromBlock: bigint, launchId?: number): Promise<Holder[]> {
+  if (launchId !== undefined) {
+    const rows = await fromIndexer<{ holder: Address; amount: string }[]>(`/launch/${launchId}/holders`);
+    if (rows) return rows.map((r) => ({ address: r.holder, amount: BigInt(r.amount) }));
+  }
   const logs = await client.getLogs({ address: token, event: TRANSFER, fromBlock, toBlock: "latest" });
   const bal = new Map<string, bigint>();
   for (const l of logs) {
@@ -272,4 +303,12 @@ export async function readAllowedQuotes(): Promise<Address[]> {
   const state = new Map<string, boolean>();
   for (const l of logs) state.set(l.args.quote!.toLowerCase(), l.args.allowed!);
   return [ETH, ...[...state].filter(([, ok]) => ok).map(([a]) => a as Address)];
+}
+
+export type LaunchStats = { vol24: bigint; holders: number; trades24: number };
+
+/** Board stats per launch id (24h volume in quote units, holders), or null without an indexer. */
+export async function readStats(): Promise<Map<number, LaunchStats> | null> {
+  const rows = await fromIndexer<{ id: number; vol24: string; holders: number; trades24: number }[]>("/stats");
+  return rows ? new Map(rows.map((r) => [r.id, { vol24: BigInt(r.vol24), holders: r.holders, trades24: r.trades24 }])) : null;
 }
