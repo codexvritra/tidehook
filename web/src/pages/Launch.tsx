@@ -4,6 +4,8 @@ import { tideLauncherAbi } from "../lib/abis";
 import { go, useApp } from "../lib/appContext";
 import { ADDR, ETH } from "../lib/chain";
 import { PAIR_ASSETS } from "../lib/stocks";
+import { fmtUsd, useUsdPrices } from "../lib/usd";
+import { Money } from "../components/Money";
 import { poolIdOf, sqrtPriceOf } from "../lib/pool";
 import { KINDS, KIND_BLURB, readAsset, type Asset } from "../lib/data";
 import { floorTickFor, fmtNum, mcapForStartTick, startTickForMcap } from "../lib/price";
@@ -80,6 +82,7 @@ export function LaunchPage() {
     }
   }
 
+  const usdPrices = useUsdPrices();
   const mcapNum = Number(mcap);
   const plan = useMemo(() => {
     if (!asset || !(mcapNum > 0)) return null;
@@ -239,7 +242,10 @@ export function LaunchPage() {
               <div className="field">
                 <label>
                   <span>Starting market cap</span>
-                  <span className="dim">{asset?.symbol}</span>
+                  <span className="dim">
+                    {asset?.symbol}
+                    {asset && usdPrices.get(asset.address.toLowerCase()) && mcapNum > 0 ? ` ≈ ${fmtUsd(mcapNum * usdPrices.get(asset.address.toLowerCase())!)}` : ""}
+                  </span>
                 </label>
                 <input className="input mono" inputMode="decimal" value={mcap} onChange={(e) => setMcap(e.target.value)} />
               </div>
@@ -314,7 +320,9 @@ export function LaunchPage() {
               {allocPct ? `${fmtNum(1e9 * (allocPct / 100))} (bonded, vesting)` : "none"}
             </dd>
             <dt>Start market cap</dt>
-            <dd className="mono">{plan ? `${fmtNum(plan.actualMcap)} ${asset?.symbol}` : "—"}</dd>
+            <dd className="mono">
+              {plan && asset ? <Money amount={plan.actualMcap} quote={asset.address} symbol={asset.symbol} prices={usdPrices} /> : "—"}
+            </dd>
             <dt>Start price</dt>
             <dd className="mono">{plan ? `${(plan.actualMcap / 1e9).toExponential(3)} ${asset?.symbol}` : "—"}</dd>
             <dt>LP fee</dt>

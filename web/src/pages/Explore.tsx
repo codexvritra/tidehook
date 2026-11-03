@@ -3,8 +3,10 @@ import { go, useApp } from "../lib/appContext";
 import { client } from "../lib/chain";
 import { KINDS, readAsset, readLaunches, readStats, usePoll, type Asset, type Launch } from "../lib/data";
 import { formatUnits } from "viem";
+import { useUsdPrices } from "../lib/usd";
+import { Money } from "../components/Money";
 import { ago, short } from "../lib/format";
-import { fmtNum, marketCap, priceAtTick, tokenPrice } from "../lib/price";
+import { marketCap, priceAtTick, tokenPrice } from "../lib/price";
 import { Avatar, KindBadge, Logo, Price } from "../components/bits";
 
 function useAssets(launches: Launch[] | undefined) {
@@ -37,6 +39,7 @@ export function Explore() {
   const [kind, setKind] = useState<number | null>(null);
   const [sort, setSort] = useState<"new" | "mcap" | "vol" | "gain">("new");
   const [stats] = usePoll(readStats, 15_000, []);
+  const usd = useUsdPrices();
   const [view, setView] = useState<"list" | "grid">("list");
 
   const rows = useMemo(() => {
@@ -46,16 +49,18 @@ export function Explore() {
       const start = a ? priceAtTick(l.tokenIsCurrency0 ? l.tickLower : l.tickUpper, l.tokenIsCurrency0, a.decimals) : NaN;
       const st = stats?.get(l.id);
       const vol = st && a ? Number(formatUnits(st.vol24, a.decimals)) : NaN;
-      return { l, a, price, mcap: marketCap(price), chg: (price / start - 1) * 100, vol, holders: st?.holders };
+      const px = usd.get(l.quote.toLowerCase());
+      const mcap = marketCap(price);
+      return { l, a, price, mcap, mcapUsd: px ? mcap * px : NaN, chg: (price / start - 1) * 100, vol, volUsd: px ? vol * px : NaN, holders: st?.holders };
     });
     const needle = q.trim().toLowerCase();
     if (needle) r = r.filter(({ l }) => [l.name, l.symbol, l.token].some((s) => s.toLowerCase().includes(needle)));
     if (kind !== null) r = r.filter(({ l }) => l.kind === kind);
-    if (sort === "mcap") r = [...r].sort((x, y) => (y.mcap || 0) - (x.mcap || 0));
+    if (sort === "mcap") r = [...r].sort((x, y) => (y.mcapUsd || 0) - (x.mcapUsd || 0));
     if (sort === "gain") r = [...r].sort((x, y) => (y.chg || -1e9) - (x.chg || -1e9));
-    if (sort === "vol") r = [...r].sort((x, y) => (y.vol || 0) - (x.vol || 0));
+    if (sort === "vol") r = [...r].sort((x, y) => (y.volUsd || 0) - (x.volUsd || 0));
     return r;
-  }, [launches, assets, q, kind, sort, stats]);
+  }, [launches, assets, q, kind, sort, stats, usd]);
 
   return (
     <>
@@ -216,7 +221,7 @@ export function Explore() {
                         </span>
                       </td>
                       <td>
-                        {fmtNum(mcap)} <span className="dim">{a?.symbol}</span>
+                        <Money amount={mcap} quote={l.quote} symbol={a?.symbol} prices={usd} />
                       </td>
                       <td>
                         <span className="tax" title="Buy 2% (1% creator + 1% platform) / sell 2% (platform), paid in ETH">
@@ -226,7 +231,9 @@ export function Explore() {
                       <td>
                         <KindBadge kind={l.kind} />
                       </td>
-                      <td>{isFinite(vol) ? <>{fmtNum(vol)} <span className="dim">{a?.symbol}</span></> : <span className="dim">—</span>}</td>
+                      <td>
+                        <Money amount={vol} quote={l.quote} symbol={a?.symbol} prices={usd} />
+                      </td>
                       <td>{holders ?? <span className="dim">—</span>}</td>
                       <td className="dim">{ago(l.createdAt)}</td>
                       <td className="dim">{short(l.creator)}</td>
@@ -259,7 +266,7 @@ export function Explore() {
                     <div>
                       <label>MCap</label>
                       <b>
-                        {fmtNum(mcap)} {a?.symbol}
+                        <Money amount={mcap} quote={l.quote} symbol={a?.symbol} prices={usd} />
                       </b>
                     </div>
                     <div>

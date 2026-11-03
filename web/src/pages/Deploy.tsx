@@ -84,7 +84,7 @@ export function Deploy() {
           Put tidehook on <em>Robinhood Chain.</em>
         </h2>
         <p className="section-lede">
-          Eight contracts go to fixed addresses through the standard CREATE2 deployer (<span className="mono">{short(CREATE2_DEPLOYER)}</span>), so these
+          Eight contracts go to fixed addresses through the standard CREATE2 deployer, so these
           addresses are the same no matter who deploys. Each hook's address was mined so its last 14 bits match the
           permissions Uniswap v4 requires. Your wallet signs every transaction, and the site never sees a key.
         </p>
@@ -100,7 +100,6 @@ export function Deploy() {
                 <tr>
                   <th>Contract</th>
                   <th>Role</th>
-                  <th>Address</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -112,11 +111,6 @@ export function Deploy() {
                       <b>{p.name}</b>
                     </td>
                     <td className="muted">{ROLE[p.name]}</td>
-                    <td>
-                      <a className="mono" href={explorer(p.address)} target="_blank" rel="noreferrer">
-                        {short(p.address)}
-                      </a>
-                    </td>
                     <td>{live === undefined ? "…" : live[i] ? <span className="ok">✓ live</span> : <span className="dim">not deployed</span>}</td>
                     <td>
                       {live && !live[i] && (

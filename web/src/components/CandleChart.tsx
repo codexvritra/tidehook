@@ -49,7 +49,7 @@ function candles(ticks: Tick[], frame: number, scale: number) {
 }
 
 /** TradingView-style candles built from on-chain swaps: timeframes, volume, price or market cap. */
-export function CandleChart({ ticks, symbol, quote, supply }: { ticks: Tick[]; symbol: string; quote: string; supply: number }) {
+export function CandleChart({ ticks, symbol, quote, supply, usd }: { ticks: Tick[]; symbol: string; quote: string; supply: number; usd?: number }) {
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<{ c: ISeriesApi<"Candlestick">; v: ISeriesApi<"Histogram"> } | null>(null);
@@ -60,11 +60,11 @@ export function CandleChart({ ticks, symbol, quote, supply }: { ticks: Tick[]; s
   const [mode, setMode] = useState<"price" | "mcap">("price");
   // The chart can't step below ~1e-10, so values are shifted by 10^k into a sane range and labels shift back.
   const data = useMemo(() => {
-    const unit = mode === "mcap" ? supply : 1;
+    const unit = mode === "mcap" ? supply * (usd ?? 1) : 1; // market cap in dollars when priced
     const max = Math.max(...ticks.map((t) => t.price * unit), 1e-30);
     const k = Math.max(0, Math.ceil(-Math.log10(max)) + 3);
     return { ...candles(ticks, frame, unit * 10 ** k), k };
-  }, [ticks, frame, mode, supply]);
+  }, [ticks, frame, mode, supply, usd]);
   const shift = useRef(0);
   shift.current = data.k;
 
@@ -124,7 +124,7 @@ export function CandleChart({ ticks, symbol, quote, supply }: { ticks: Tick[]; s
         </button>
         {last && (
           <span className="cchart-ohlc">
-            {symbol}/{quote} · O <b>{fmt(last.open / 10 ** data.k)}</b> H <b>{fmt(last.high / 10 ** data.k)}</b> L <b>{fmt(last.low / 10 ** data.k)}</b> C{" "}
+            {mode === "mcap" ? (usd ? "MCap $" : `MCap ${quote}`) : `${symbol}/${quote}`} · O <b>{fmt(last.open / 10 ** data.k)}</b> H <b>{fmt(last.high / 10 ** data.k)}</b> L <b>{fmt(last.low / 10 ** data.k)}</b> C{" "}
             <b className={last.close >= last.open ? "up" : "down"}>{fmt(last.close / 10 ** data.k)}</b>
           </span>
         )}

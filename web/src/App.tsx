@@ -109,9 +109,6 @@ export default function App() {
             {tab("launch", "Create", "#/launch")}
             {tab("about", "Hooks", "#/about")}
             {tab("deploy", "Deploy", "#/deploy")}
-            <a href={GITHUB_URL} target="_blank" rel="noreferrer">
-              GitHub
-            </a>
           </div>
           <div className="nav-right">
             <span className="chain-pill" title="Robinhood Chain · 4663">

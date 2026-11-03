@@ -15,6 +15,8 @@ import { CreatorTransfer, ManagePanel, PendingBanner } from "../components/Manag
 import { EarningsPanel } from "../components/Earnings";
 import { Copy } from "../components/ui";
 import { useTokenMeta } from "../lib/media";
+import { useUsdPrices } from "../lib/usd";
+import { Money } from "../components/Money";
 
 export function TokenPage({ id }: { id: number }) {
   const { session, deploy } = useApp();
@@ -36,6 +38,7 @@ export function TokenPage({ id }: { id: number }) {
   const [tab, setTab] = useState<"trades" | "holders" | "traders" | "hook">("trades");
   const [holders] = usePoll(() => (launch ? readHolders(launch.token, launch.createdBlock, launch.id) : Promise.resolve([])), 30_000, [launch?.token]);
   const now = useChainNow(5000);
+  const usd = useUsdPrices();
   const traders = useTraders(trades ?? [], asset?.decimals ?? 18);
   const [pending, , reloadPending] = usePoll(() => readPending(id), 20_000, [id, deploy?.ready]);
   const [renames] = usePoll(() => (launch ? readRenames(id, launch.createdBlock) : Promise.resolve([])), 60_000, [id, launch?.renamedAt]);
@@ -165,13 +168,13 @@ export function TokenPage({ id }: { id: number }) {
           <div>
             <label>MCap</label>
             <b>
-              {fmtNum(mcap)} {asset.symbol}
+              <Money amount={mcap} quote={l.quote} symbol={asset.symbol} prices={usd} />
             </b>
           </div>
           <div>
             <label>24h Vol</label>
             <b>
-              {fmtNum(vol24)} {asset.symbol}
+              <Money amount={vol24} quote={l.quote} symbol={asset.symbol} prices={usd} />
             </b>
           </div>
           <div>
@@ -192,7 +195,7 @@ export function TokenPage({ id }: { id: number }) {
       <div className="tgrid">
         <div className="tmain">
           <div className="chart-panel">
-            <CandleChart ticks={ticks} symbol={l.symbol} quote={asset.symbol} supply={1e9} />
+            <CandleChart ticks={ticks} symbol={l.symbol} quote={asset.symbol} supply={1e9} usd={usd.get(l.quote.toLowerCase())} />
           </div>
 
           <div className="tabs" role="tablist">
@@ -384,15 +387,15 @@ export function TokenPage({ id }: { id: number }) {
             <dl className="kv">
               <dt>24h Vol</dt>
               <dd>
-                {fmtNum(vol24)} {asset.symbol}
+                <Money amount={vol24} quote={l.quote} symbol={asset.symbol} prices={usd} />
               </dd>
               <dt>MCap</dt>
               <dd>
-                {fmtNum(mcap)} {asset.symbol}
+                <Money amount={mcap} quote={l.quote} symbol={asset.symbol} prices={usd} />
               </dd>
               <dt>FDV</dt>
               <dd>
-                {fmtNum(mcap)} {asset.symbol}
+                <Money amount={mcap} quote={l.quote} symbol={asset.symbol} prices={usd} />
               </dd>
               <dt>Holders</dt>
               <dd>{holders ? holders.length : "…"}</dd>
@@ -403,7 +406,7 @@ export function TokenPage({ id }: { id: number }) {
               </dd>
               <dt>Launch MCap</dt>
               <dd>
-                {fmtNum(marketCap(startPrice))} {asset.symbol}
+                <Money amount={marketCap(startPrice)} quote={l.quote} symbol={asset.symbol} prices={usd} />
               </dd>
               <dt>Max supply</dt>
               <dd>1,000,000,000</dd>
