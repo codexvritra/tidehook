@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@400;700&display=block" rel="stylesheet">
+<style>
+html,body{margin:0;width:1600px;height:900px;background:#070808;overflow:hidden;color:#e8ffe0;font-family:'JetBrains Mono',monospace}
+.bg{position:absolute;inset:0;background-image:linear-gradient(rgba(208,255,0,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(208,255,0,.05) 1px,transparent 1px);background-size:32px 32px}
+.glow{position:absolute;left:50%;top:44%;width:1300px;height:900px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(208,255,0,.13),transparent 60%)}
+.wave{position:absolute;left:0;right:0;bottom:0;height:150px}
+.top{position:absolute;left:96px;top:80px;display:flex;align-items:center;gap:20px}
+.top img{width:64px;height:64px;image-rendering:pixelated;filter:drop-shadow(0 0 12px rgba(208,255,0,.5))}
+.top b{font-family:'Silkscreen',monospace;font-size:44px;color:#d0ff00;letter-spacing:2px}
+.stamp{position:absolute;right:96px;top:84px;font-size:20px;letter-spacing:3px;color:#070808;background:#d0ff00;padding:10px 18px;font-weight:700;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+.main{position:absolute;left:96px;right:96px;top:220px}
+.kicker{font-size:24px;letter-spacing:4px;color:#9ca3af}
+.kicker::before{content:"/// ";color:#d0ff00}
+h1{margin:18px 0 0;font-family:'Silkscreen',monospace;font-weight:700;font-size:118px;line-height:1.02;color:#fff;letter-spacing:1px}
+h1 em{font-style:normal;color:#d0ff00;text-shadow:0 0 34px rgba(208,255,0,.4)}
+.card{margin-top:46px;display:inline-flex;align-items:center;gap:26px;border:1px solid rgba(208,255,0,.5);background:rgba(208,255,0,.05);padding:22px 30px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.tag{display:flex;align-items:center;gap:14px;font-size:30px;font-weight:700;color:#fff}
+.tag i{display:inline-grid;place-items:center;width:40px;height:40px;background:#d0ff00;color:#070808;font-style:normal;font-size:24px;border-radius:50%}
+.arrow{font-size:34px;color:#d0ff00}
+.dest{font-size:30px;font-weight:700;color:#fff;letter-spacing:2px}
+.status{font-size:20px;color:#fbbf24;border:1px solid rgba(251,191,36,.6);padding:6px 12px;letter-spacing:2px}
+.foot{position:absolute;left:96px;bottom:168px;font-size:24px;color:#9ca3af}
+.foot b{color:#d0ff00;font-weight:500}
+</style></head><body>
+<div class="bg"></div><div class="glow"></div>
+<svg class="wave" viewBox="0 0 1600 150" preserveAspectRatio="none" shape-rendering="crispEdges"><g fill="#d0ff00" opacity=".15" id="w"></g></svg>
+<div class="top"><img src="mark.svg"><b>TIDEHOOK</b></div>
+<div class="stamp">UPDATE</div>
+<div class="main">
+  <div class="kicker">TEAM TAG</div>
+  <h1>SUBMITTED<br>TO <em>FOMO</em></h1>
+  <div class="card">
+    <span class="tag"><i>✓</i> TIDEHOOK TEAM</span>
+    <span class="arrow">→</span>
+    <span class="dest">FOMO</span>
+    <span class="status">IN REVIEW</span>
+  </div>
+</div>
+<div class="foot">Uniswap v4 launchpad on Robinhood Chain · <b>tidehook.net</b> · <b>@TIDEHOOK</b></div>
+<script>
+const g=document.getElementById('w');let s='';
+for(let x=0;x<1600;x+=10){const h=Math.round(52+34*Math.sin(x/100)+16*Math.sin(x/41));s+=`<rect x="${x}" y="${150-h}" width="9" height="${h}"/>`}
+g.innerHTML=s;
+</script></body></html>

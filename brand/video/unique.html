@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@400;700&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; background: #070808; overflow: hidden; color: #e8ffe0; font-family: 'JetBrains Mono', monospace; }
+  .bg { position: absolute; inset: 0; background-image: linear-gradient(rgba(208,255,0,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(208,255,0,.05) 1px, transparent 1px); background-size: 40px 40px; }
+  .glow { position: absolute; width: 1500px; height: 1100px; left: 50%; top: 50%; transform: translate(-50%,-50%); background: radial-gradient(circle, rgba(208,255,0,.12), transparent 60%); }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .pixel { font-family: 'Silkscreen', monospace; font-weight: 700; }
+  .lime { color: #d0ff00; }
+  .brand { position: absolute; left: 96px; top: 70px; display: flex; align-items: center; gap: 18px; }
+  .brand img { width: 52px; height: 52px; image-rendering: pixelated; }
+  .brand b { font-family: 'Silkscreen', monospace; font-size: 34px; color: #d0ff00; letter-spacing: 2px; }
+  .handle { position: absolute; right: 96px; top: 82px; font-size: 26px; color: #9ca3af; }
+  .num { font-size: 30px; letter-spacing: 6px; color: #9ca3af; }
+  .num b { color: #d0ff00; }
+  .title { font-family: 'Silkscreen', monospace; font-weight: 700; font-size: 104px; line-height: 1.04; color: #fff; margin-top: 14px; }
+  .sub { font-size: 32px; color: #9ca3af; margin-top: 26px; }
+  .left { position: absolute; left: 120px; top: 250px; width: 900px; }
+  .chip { display: inline-block; padding: 14px 24px; border: 2px solid rgba(208,255,0,.6); color: #d0ff00; font-size: 34px; font-weight: 700; background: rgba(208,255,0,.06); }
+  .chip.on { background: #d0ff00; color: #070808; }
+  .x { position: absolute; height: 6px; background: #f23645; transform-origin: left center; }
+  #wave { position: absolute; left: 0; right: 0; bottom: 0; height: 140px; }
+</style>
+</head>
+<body>
+<div class="bg"></div><div class="glow"></div>
+<svg id="wave" viewBox="0 0 1920 140" preserveAspectRatio="none" shape-rendering="crispEdges"><g fill="#d0ff00" opacity=".14" id="waveg"></g></svg>
+<div class="brand" id="brand"><img src="../mark.svg"><b>TIDEHOOK</b></div>
+<div class="handle" id="handle">@TIDEHOOK</div>
+
+<!-- 0: intro -->
+<div class="scene" id="s0">
+  <img id="s0logo" src="../mark.svg" style="position:absolute;left:50%;top:330px;width:200px;height:200px;image-rendering:pixelated;filter:drop-shadow(0 0 30px rgba(208,255,0,.6))">
+  <div id="s0title" class="pixel" style="position:absolute;left:0;right:0;top:580px;text-align:center;font-size:120px;color:#d0ff00;text-shadow:0 0 40px rgba(208,255,0,.4)">TIDEHOOK</div>
+  <div id="s0sub" style="position:absolute;left:0;right:0;top:740px;text-align:center;font-size:40px;color:#fff;letter-spacing:4px"></div>
+</div>
+
+<!-- 1: no cap -->
+<div class="scene" id="s1">
+  <div class="left">
+    <div class="num"><b>01</b> / 04</div>
+    <div class="title">NO CAP.<br><span class="lime">NEVER STUCK.</span></div>
+    <div class="sub">No bonding curve, no graduation.<br>A real Uniswap v4 pool from block one.</div>
+  </div>
+  <svg id="s1chart" style="position:absolute;left:1060px;top:240px" width="760" height="560" viewBox="0 0 760 560">
+    <line x1="0" y1="200" x2="760" y2="200" stroke="#f23645" stroke-width="3" stroke-dasharray="12 10" opacity=".8"/>
+    <text x="10" y="186" fill="#f23645" font-size="24" font-family="JetBrains Mono">other pads: cap / graduation</text>
+    <path id="s1path" fill="none" stroke="#2bc235" stroke-width="6" stroke-linejoin="round"/>
+    <circle id="s1dot" r="12" fill="#d0ff00"/>
+  </svg>
+  <div id="s1tag" class="chip on" style="position:absolute;left:1260px;top:150px;opacity:0">∞ KEEPS GOING</div>
+</div>
+
+<!-- 2: rename -->
+<div class="scene" id="s2">
+  <div class="left">
+    <div class="num"><b>02</b> / 04</div>
+    <div class="title">RENAME IT<br><span class="lime">AFTER LAUNCH.</span></div>
+    <div class="sub">name() and symbol() change on-chain.<br>Every rename is public history.</div>
+  </div>
+  <div style="position:absolute;left:1080px;top:380px;width:720px;height:300px;border:2px solid rgba(208,255,0,.45);background:rgba(208,255,0,.04)">
+    <div style="position:absolute;left:34px;top:26px;font-size:24px;color:#9ca3af">TOKEN</div>
+    <div id="s2sym" class="pixel" style="position:absolute;left:34px;top:80px;font-size:120px;color:#fff">$MOON</div>
+    <div id="s2stamp" class="chip on" style="position:absolute;right:30px;top:20px;font-size:26px;opacity:0">RENAMED ×1</div>
+  </div>
+</div>
+
+<!-- 3: stock pair -->
+<div class="scene" id="s3">
+  <div class="left">
+    <div class="num"><b>03</b> / 04</div>
+    <div class="title">SWITCH THE<br>PAIR TO A <span class="lime">STOCK.</span></div>
+    <div class="sub">24h public notice · converted through<br>a real Uniswap v4 pool.</div>
+  </div>
+  <div style="position:absolute;left:1100px;top:300px;display:flex;align-items:center;gap:30px">
+    <span class="chip" id="s3from" style="font-size:52px;padding:18px 34px">ETH</span>
+    <span id="s3arrow" style="font-size:60px;color:#d0ff00">→</span>
+    <span class="chip on" id="s3to" style="font-size:52px;padding:18px 34px">NVDA</span>
+  </div>
+  <div id="s3grid" style="position:absolute;left:1100px;top:520px;width:720px;display:flex;flex-wrap:wrap;gap:16px"></div>
+</div>
+
+<!-- 4: no dev bags -->
+<div class="scene" id="s4">
+  <div class="left">
+    <div class="num"><b>04</b> / 04</div>
+    <div class="title">NO DEV<br><span class="lime">BAGS.</span></div>
+    <div class="sub">100% of supply goes into the pool.<br>Creator bags only via Bond: 30+ day vest,<br>burned if the floor breaks.</div>
+  </div>
+  <div style="position:absolute;left:1080px;top:420px;width:720px">
+    <div style="font-size:26px;color:#9ca3af;margin-bottom:16px">SUPPLY · 1,000,000,000</div>
+    <div style="height:90px;border:2px solid rgba(208,255,0,.5);position:relative;overflow:hidden">
+      <div id="s4bar" style="position:absolute;left:0;top:0;bottom:0;width:0;background:#d0ff00"></div>
+      <div id="s4pct" class="pixel" style="position:absolute;left:24px;top:18px;font-size:48px;color:#070808">0%</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:16px;font-size:26px">
+      <span class="lime">→ LOCKED POOL LIQUIDITY</span><span style="color:#9ca3af">DEV WALLET: <b id="s4dev" style="color:#fff">0</b></span>
+    </div>
+  </div>
+</div>
+
+<!-- 5: cta -->
+<div class="scene" id="s5">
+  <div style="position:absolute;left:0;right:0;top:280px;text-align:center">
+    <div class="pixel" style="font-size:96px;color:#fff">FLAT <span class="lime">2<span style="font-family:JetBrains Mono;font-weight:700">%</span></span></div>
+    <div style="font-size:38px;color:#9ca3af;margin-top:18px">buy: 1% creator + 1% platform · sell: 2% · all paid in ETH</div>
+    <div id="s5url" class="chip on" style="margin-top:70px;font-size:44px;padding:22px 40px">tidehook.net</div>
+    <div style="margin-top:34px;font-size:34px;color:#d0ff00">@TIDEHOOK · Robinhood Chain</div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = (x) => 1 - Math.pow(1 - x, 3);
+const SCENES = [[0, 3.2], [3.2, 7.4], [7.4, 11.4], [11.4, 15.6], [15.6, 19.6], [19.6, 23.5]];
+const STOCKS = ["USDG", "NVDA", "SPY", "TSLA", "GME", "PLTR", "GLD", "SPCX", "MU"];
+$("s3grid").innerHTML = STOCKS.map((s, i) => `<span class="chip" id="st${i}" style="font-size:28px;padding:10px 18px;opacity:.15">${s}</span>`).join("");
+
+function wave(t) {
+  let s = "";
+  for (let x = 0; x < 1920; x += 12) {
+    const h = Math.round(48 + 30 * Math.sin(x / 110 + t * 1.6) + 14 * Math.sin(x / 43 - t * 2.3));
+    s += `<rect x="${x}" y="${140 - h}" width="11" height="${h}"/>`;
+  }
+  $("waveg").innerHTML = s;
+}
+
+window.render = function (t) {
+  wave(t);
+  SCENES.forEach(([a, b], i) => {
+    const alpha = ease(seg(t, a, a + 0.45)) * (i === SCENES.length - 1 ? 1 : 1 - ease(seg(t, b - 0.45, b)));
+    const el = $("s" + i);
+    el.style.opacity = alpha;
+    el.style.transform = `translateY(${(1 - ease(seg(t, a, a + 0.6))) * 30}px)`;
+  });
+  const chrome = 1 - ease(seg(t, 0, 0.4)) * 0 ; // header always on
+  $("brand").style.opacity = t < 3.2 ? ease(seg(t, 2.6, 3.2)) : 1;
+  $("handle").style.opacity = $("brand").style.opacity;
+
+  // 0: intro
+  const p0 = ease(seg(t, 0.1, 0.9));
+  $("s0logo").style.transform = `translateX(-50%) scale(${0.4 + 0.6 * p0})`;
+  $("s0logo").style.opacity = p0;
+  $("s0title").style.opacity = ease(seg(t, 0.5, 1.1));
+  const line = "WHY WE'RE DIFFERENT";
+  $("s0sub").textContent = line.slice(0, Math.floor(seg(t, 1.1, 2.3) * line.length)) + (t % 0.6 < 0.3 && t < 3 ? "_" : "");
+
+  // 1: chart climbs straight through the cap line
+  const p1 = seg(t, 3.6, 6.6);
+  const pts = [];
+  const N = Math.max(2, Math.floor(p1 * 60));
+  for (let i = 0; i <= N; i++) {
+    const u = i / 60;
+    const x = u * 700 + 20;
+    const y = 520 - (Math.pow(u, 1.6) * 480 + 22 * Math.sin(u * 19) * u);
+    pts.push([x, y]);
+  }
+  $("s1path").setAttribute("d", "M" + pts.map((p) => p.map((v) => v.toFixed(1)).join(",")).join(" L"));
+  const last = pts[pts.length - 1];
+  $("s1dot").setAttribute("cx", last[0]);
+  $("s1dot").setAttribute("cy", last[1]);
+  $("s1tag").style.opacity = ease(seg(t, 5.9, 6.4));
+
+  // 2: $MOON -> $TIDE with a glitch
+  const g = seg(t, 8.6, 9.4);
+  const from = "$MOON", to = "$TIDE", junk = "#%&@$*";
+  let sym = from;
+  if (g >= 1) sym = to;
+  else if (g > 0) sym = [...to].map((c, i) => (i / to.length < g ? c : junk[Math.floor(t * 40 + i) % junk.length])).join("");
+  $("s2sym").textContent = sym;
+  $("s2sym").style.color = g >= 1 ? "#d0ff00" : "#fff";
+  $("s2stamp").style.opacity = ease(seg(t, 9.5, 9.9));
+
+  // 3: ETH -> NVDA, then every stock lights up
+  const f = ease(seg(t, 12.0, 12.6));
+  $("s3from").style.opacity = 1 - 0.6 * f;
+  $("s3arrow").style.opacity = f;
+  $("s3to").style.opacity = f;
+  $("s3to").style.transform = `scale(${0.7 + 0.3 * f})`;
+  STOCKS.forEach((_, i) => {
+    const on = ease(seg(t, 12.9 + i * 0.22, 13.2 + i * 0.22));
+    const el = $("st" + i);
+    el.style.opacity = 0.15 + 0.85 * on;
+    el.className = on > 0.9 ? "chip on" : "chip";
+  });
+
+  // 4: supply bar fills to 100%, dev wallet stays 0
+  const b = ease(seg(t, 16.2, 18.2));
+  $("s4bar").style.width = b * 100 + "%";
+  $("s4pct").innerHTML = Math.round(b * 100) + '<span style="font-family:JetBrains Mono;font-weight:700">%</span> → POOL';
+
+  // 5: cta pulse
+  const pulse = 1 + 0.03 * Math.sin(Math.max(0, t - 20.2) * 6);
+  $("s5url").style.transform = `scale(${pulse})`;
+};
+window.DURATION = 23.5;
+render(0);
+</script>
+</body>
+</html>
