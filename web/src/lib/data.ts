@@ -31,10 +31,10 @@ export type Launch = {
 
 export const KINDS = ["Patience", "Spring", "Bond", "Session"] as const;
 export const KIND_BLURB = [
-  "Commit, wait, then swap: the fee drops from 1% to 0.05%. Instant buyers pay the most.",
-  "The fee rises as the price is pushed away from its time-weighted average. Swaps back toward it get the lowest fee.",
+  "Swap instantly, or commit first and reveal later so bots can't see your size coming.",
+  "Tracks a time-weighted rest price on-chain, a live read of where the market settles.",
   "Creator tokens stay locked until the price has held above a floor. If it falls below, anyone can burn them.",
-  "The fee follows the stock market: cheapest while the exchange is open, highest at weekends.",
+  "Built for coins paired with tokenized stocks, trading 24/7 around the market clock.",
 ];
 
 /** Re-runs `fn` every `ms` while the tab is visible. Returns [data, error, reload]. */

@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@400;700&display=block" rel="stylesheet">
+<style>
+html,body{margin:0;width:1500px;height:500px;background:#070808;overflow:hidden;color:#e8ffe0;font-family:'JetBrains Mono',monospace}
+.bg{position:absolute;inset:0;background-image:linear-gradient(rgba(208,255,0,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(208,255,0,.05) 1px,transparent 1px);background-size:25px 25px}
+.glow{position:absolute;right:-120px;top:-160px;width:900px;height:800px;background:radial-gradient(circle,rgba(208,255,0,.14),transparent 60%)}
+.wave{position:absolute;left:0;right:0;bottom:0;height:120px}
+.wrap{position:absolute;left:470px;right:80px;top:92px}
+.top{display:flex;align-items:center;gap:22px}
+.top img{width:92px;height:92px;image-rendering:pixelated;filter:drop-shadow(0 0 14px rgba(208,255,0,.5))}
+h1{margin:0;font-family:'Silkscreen',monospace;font-weight:700;font-size:104px;line-height:1;color:#d0ff00;letter-spacing:2px;text-shadow:0 0 30px rgba(208,255,0,.35)}
+p{margin:20px 0 0;font-size:27px;color:#cfd8c8}
+p b{color:#fff}
+.chips{display:flex;gap:12px;margin-top:28px;flex-wrap:wrap}
+.chip{font-size:19px;padding:9px 14px;border:1px solid rgba(208,255,0,.55);color:#d0ff00;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);background:rgba(208,255,0,.06)}
+.chip.solid{background:#d0ff00;color:#070808;font-weight:700;border-color:#d0ff00}
+</style></head><body>
+<div class="bg"></div><div class="glow"></div>
+<svg class="wave" viewBox="0 0 1500 120" preserveAspectRatio="none" shape-rendering="crispEdges">
+<g fill="#d0ff00" opacity=".16" id="w"></g></svg>
+<div class="wrap">
+ <div class="top"><img src="mark.svg"><h1>TIDEHOOK</h1></div>
+ <p>Coins that keep evolving <b>after launch</b> on <b>Robinhood Chain</b></p>
+ <div class="chips"><span class="chip solid">RENAME ANYTIME</span><span class="chip solid">SWITCH TO A STOCK PAIR</span><span class="chip solid">UPGRADE THE HOOK</span><span class="chip">NO CAP</span></div>
+</div>
+<script>
+const g=document.getElementById('w');let s='';
+for(let x=0;x<1500;x+=10){const h=Math.round(40+28*Math.sin(x/90)+14*Math.sin(x/37));s+=`<rect x="${x}" y="${120-h}" width="9" height="${h}"/>`}
+g.innerHTML=s;
+</script></body></html>

@@ -11,6 +11,8 @@ import { client } from "../lib/chain";
 import { usePoll } from "../lib/data";
 import { formatEther } from "viem";
 import { Avatar, Spinner } from "../components/bits";
+import { MediaFields } from "../components/MediaFields";
+import { cleanWebsite, cleanX, mediaErrors, storeMeta, type MediaDraft } from "../lib/media";
 
 const KIND_DETAIL = [
   ["Flat 2% per trade, no LP fee", "Optional commit-reveal swaps hide size", "No early commits for snipers"],
@@ -23,7 +25,8 @@ export function LaunchPage() {
   const { requireWallet, toast, deploy } = useApp();
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
-  const [image, setImage] = useState("");
+  const [media, setMedia] = useState<MediaDraft>({ image: "", x: "", website: "" });
+  const [step, setStep] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState(0);
   const [quoteMode, setQuoteMode] = useState<"eth" | "erc20">("eth");
@@ -73,6 +76,7 @@ export function LaunchPage() {
     !plan && "starting market cap",
     quoteMode === "erc20" && !asset && "quote token",
     bondInvalid && "Bond needs an allocation vesting at least 30 days",
+    ...mediaErrors(media),
   ].filter(Boolean) as string[];
 
   async function submit() {
@@ -80,6 +84,10 @@ export function LaunchPage() {
     if (!session || !plan || !asset || errors.length) return;
     setBusy(true);
     try {
+      const hasMedia = !!(media.image || media.x.trim() || media.website.trim());
+      setStep(hasMedia ? "1/2 Saving logo and links on-chain…" : null);
+      const imageURI = await storeMeta(session, { image: media.image, x: cleanX(media.x), website: cleanWebsite(media.website) });
+      setStep(hasMedia ? "2/2 Launching…" : null);
       const receipt = await sendTx(session, {
         address: ADDR.launcher,
         abi: tideLauncherAbi,
@@ -88,7 +96,7 @@ export function LaunchPage() {
           {
             name: name.trim(),
             symbol: symbol.trim().toUpperCase(),
-            imageURI: image.trim(),
+            imageURI,
             description: description.trim(),
             kind,
             quote: asset.address,
@@ -117,6 +125,7 @@ export function LaunchPage() {
       toast(errMsg(e), "err");
     } finally {
       setBusy(false);
+      setStep(null);
     }
   }
 
@@ -128,11 +137,11 @@ export function LaunchPage() {
             <span className="n">New launch</span>
           </div>
           <h2>
-            Launch a token <em>in one transaction.</em>
+            Launch a token <em>in minutes.</em>
           </h2>
           <p className="section-lede">
-            1,000,000,000 tokens are minted. Everything you don't keep becomes single-sided liquidity in a Uniswap v4 pool,
-            locked forever. You earn that pool's swap fees.
+            1,000,000,000 tokens go into a Uniswap v4 pool, locked forever, with no cap. You earn 1% of every buy in ETH, and you
+            can rename the coin, switch its pair or upgrade its hook later.
           </p>
 
           <div className="panel">
@@ -146,19 +155,13 @@ export function LaunchPage() {
                 <input className="input mono" maxLength={12} value={symbol} onChange={(e) => setSymbol(e.target.value.replace(/\s/g, ""))} placeholder="TIDE" />
               </div>
             </div>
+            <MediaFields value={media} onChange={setMedia} label={symbol} />
             <div className="field">
               <label>
-                <span>Image URL</span>
-                <span className="dim">https:// or ipfs://</span>
+                <span>Bio</span>
+                <span className="dim">optional · {description.length}/512</span>
               </label>
-              <input className="input mono" maxLength={256} value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://…/logo.png" />
-            </div>
-            <div className="field">
-              <label>
-                <span>Description</span>
-                <span className="dim">{description.length}/512</span>
-              </label>
-              <textarea className="input" rows={3} maxLength={512} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this token for?" />
+              <textarea className="input" rows={3} maxLength={512} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tell people what this coin is about" />
             </div>
 
             <div className="field">
@@ -262,7 +265,7 @@ export function LaunchPage() {
             <span className="tag">Preview</span>
           </div>
           <div className="card-top">
-            <Avatar src={image} label={symbol || "??"} size={56} />
+            <Avatar src={media.image} label={symbol || "??"} size={56} />
             <div className="card-title">
               <b>{name || "Token name"}</b>
               <span className="mono dim">${symbol.toUpperCase() || "SYMBOL"}</span>
@@ -295,7 +298,7 @@ export function LaunchPage() {
           <button className="btn primary block" disabled={busy || errors.length > 0 || !deploy?.ready} onClick={submit}>
             {busy ? (
               <>
-                <Spinner /> Launching…
+                <Spinner /> {step ?? "Launching…"}
               </>
             ) : (
               "Launch on Robinhood Chain"

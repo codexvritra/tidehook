@@ -13,6 +13,7 @@ import { Swap } from "../components/Swap";
 import { CreatorTransfer, ManagePanel, PendingBanner } from "../components/Manage";
 import { EarningsPanel } from "../components/Earnings";
 import { Copy } from "../components/ui";
+import { useTokenMeta } from "../lib/media";
 
 export function TokenPage({ id }: { id: number }) {
   const { session, deploy } = useApp();
@@ -35,6 +36,7 @@ export function TokenPage({ id }: { id: number }) {
   const [pending, , reloadPending] = usePoll(() => readPending(id), 20_000, [id, deploy?.ready]);
   const [renames] = usePoll(() => (launch ? readRenames(id, launch.createdBlock) : Promise.resolve([])), 60_000, [id, launch?.renamedAt]);
   const [pendingQuote, setPendingQuote] = useState("…");
+  const tokenMeta = useTokenMeta(launch?.imageURI);
   useEffect(() => {
     if (pending) readAsset(pending.quote).then((a) => setPendingQuote(a.symbol)).catch(() => setPendingQuote("?"));
   }, [pending?.quote]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -78,6 +80,7 @@ export function TokenPage({ id }: { id: number }) {
 
   const panelProps = { launch: l, asset, poolId, onChanged: refresh };
   const HookPanel = [PatiencePanel, SpringPanel, BondPanel, SessionPanel][l.kind];
+  const meta = tokenMeta;
   const quoteDec = asset.decimals;
 
   return (
@@ -106,6 +109,22 @@ export function TokenPage({ id }: { id: number }) {
               <a href={explorer(l.token)} target="_blank" rel="noreferrer">
                 EXPLORER ↗
               </a>
+              {meta.x && (
+                <>
+                  <span>·</span>
+                  <a href={`https://x.com/${meta.x}`} target="_blank" rel="noreferrer noopener">
+                    X @{meta.x} ↗
+                  </a>
+                </>
+              )}
+              {meta.website && (
+                <>
+                  <span>·</span>
+                  <a href={meta.website} target="_blank" rel="noreferrer noopener nofollow">
+                    {new URL(meta.website).hostname.replace(/^www\./, "").toUpperCase()} ↗
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -240,7 +259,7 @@ export function TokenPage({ id }: { id: number }) {
           {l.description && (
             <div className="panel">
               <div className="panel-head">
-                <span className="tag">Description</span>
+                <span className="tag">Bio</span>
               </div>
               <p className="muted" style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap" }}>
                 {l.description}

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { KINDS } from "../lib/data";
 import { priceParts } from "../lib/price";
+import { useTokenMeta } from "../lib/media";
 
 export function Avatar({ src, label, size = 44 }: { src?: string; label: string; size?: number }) {
-  const [broken, setBroken] = useState(false);
-  const safe = src && /^(https:\/\/|ipfs:\/\/)/.test(src) ? src.replace(/^ipfs:\/\//, "https://ipfs.io/ipfs/") : "";
-  if (!safe || broken) {
+  const [broken, setBroken] = useState<string | null>(null);
+  const { image } = useTokenMeta(src);
+  if (!image || broken === image) {
     const hue = [...label].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
     return (
       <span className="avatar" style={{ width: size, height: size, background: `linear-gradient(135deg, hsl(${hue} 70% 45%), hsl(${(hue + 60) % 360} 70% 35%))` }}>
@@ -13,7 +14,7 @@ export function Avatar({ src, label, size = 44 }: { src?: string; label: string;
       </span>
     );
   }
-  return <img className="avatar" src={safe} alt="" width={size} height={size} onError={() => setBroken(true)} referrerPolicy="no-referrer" />;
+  return <img className="avatar" src={image} alt="" width={size} height={size} onError={() => setBroken(image)} referrerPolicy="no-referrer" />;
 }
 
 export function KindBadge({ kind }: { kind: number }) {

@@ -8,6 +8,8 @@ import { fmtDuration } from "../lib/format";
 import { errMsg, sendTx } from "../lib/tx";
 import { useChainNow } from "../lib/wallet";
 import { Spinner } from "./bits";
+import { MediaFields } from "./MediaFields";
+import { cleanWebsite, cleanX, encodeMeta, mediaErrors, storeMeta, useTokenMeta, type MediaDraft } from "../lib/media";
 
 const RENAME_COOLDOWN = 86_400;
 const MIGRATION_WINDOW = 3 * 86_400;
@@ -34,10 +36,35 @@ export function ManagePanel({ launch: l, pending, onChanged }: { launch: Launch;
   // ---- rename
   const [name, setName] = useState(l.name);
   const [symbol, setSymbol] = useState(l.symbol);
-  const [image, setImage] = useState(l.imageURI);
   const [desc, setDesc] = useState(l.description);
+  const current = useTokenMeta(l.imageURI);
+  const [media, setMedia] = useState<MediaDraft | null>(null);
+  const draft: MediaDraft = media ?? { image: current.image ?? "", x: current.x ?? "", website: current.website ?? "" };
+  const draftMeta = { image: draft.image, x: cleanX(draft.x), website: cleanWebsite(draft.website) };
+  const mediaChanged = media !== null && encodeMeta(draftMeta) !== encodeMeta(current);
   const renameReady = l.renamedAt === 0 || now >= l.renamedAt + RENAME_COOLDOWN;
-  const changed = name !== l.name || symbol !== l.symbol || image !== l.imageURI || desc !== l.description;
+  const changed = name !== l.name || symbol !== l.symbol || mediaChanged || desc !== l.description;
+
+  async function saveRename() {
+    if (!session) return;
+    setBusy("rename");
+    try {
+      const imageURI = mediaChanged ? await storeMeta(session, draftMeta) : l.imageURI;
+      await sendTx(session, {
+        address: ADDR.launcher,
+        abi: tideLauncherAbi,
+        functionName: "updateMetadata",
+        args: [BigInt(l.id), name.trim(), symbol.trim(), imageURI, desc.trim()],
+      });
+      toast("Updated on-chain.");
+      setMedia(null);
+      onChanged();
+    } catch (e) {
+      toast(errMsg(e), "err");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   // ---- migrate
   const [quotes, setQuotes] = useState<Asset[]>([]);
@@ -87,18 +114,18 @@ export function ManagePanel({ launch: l, pending, onChanged }: { launch: Launch;
           <input className="input" maxLength={12} value={symbol} onChange={(e) => setSymbol(e.target.value.replace(/\s/g, "").toUpperCase())} />
         </div>
       </div>
+      <MediaFields value={draft} onChange={setMedia} label={symbol} />
       <div className="field">
-        <label>Image URL</label>
-        <input className="input" maxLength={256} value={image} onChange={(e) => setImage(e.target.value)} />
-      </div>
-      <div className="field">
-        <label>Description</label>
+        <label>
+          <span>Bio</span>
+          <span className="dim">optional</span>
+        </label>
         <textarea className="input" rows={2} maxLength={512} value={desc} onChange={(e) => setDesc(e.target.value)} />
       </div>
       <button
         className="btn primary block"
-        disabled={!!busy || !changed || !renameReady || !name.trim() || !symbol.trim()}
-        onClick={() => run("rename", "updateMetadata", [BigInt(l.id), name.trim(), symbol.trim(), image.trim(), desc.trim()], "Renamed on-chain.")}
+        disabled={!!busy || !changed || !renameReady || !name.trim() || !symbol.trim() || mediaErrors(draft).length > 0}
+        onClick={saveRename}
       >
         {busy === "rename" ? <Spinner /> : renameReady ? "Save rename" : `Next rename in ${fmtDuration(l.renamedAt + RENAME_COOLDOWN - now)}`}
       </button>
