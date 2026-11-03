@@ -19,10 +19,10 @@ import { parseEther } from "viem";
 type Item = { name: string; address: Address; salt: Hex; initCode: Hex };
 
 const ROLE: Record<string, string> = {
-  PatienceHook: "Commit-reveal fee lane",
-  SpringHook: "Restoring-force fees",
+  PatienceHook: "Commit-reveal swaps, 2% launchpad tax",
+  SpringHook: "Rest-price tracking, 2% launchpad tax",
   CreatorBondHook: "Creator escrow and floor",
-  SessionHook: "Market-session fees",
+  SessionHook: "Stock-pair hook, 2% launchpad tax",
   TideLauncher: "Token + pool + locked liquidity in one tx; rename and migrate",
   TideTokenFactory: "Deploys each launch's ERC20",
   TideMigrator: "Moves locked liquidity to a new hook or pair",
@@ -84,7 +84,7 @@ export function Deploy() {
           Put tidehook on <em>Robinhood Chain.</em>
         </h2>
         <p className="section-lede">
-          Six contracts go to fixed addresses through the standard CREATE2 deployer (<span className="mono">{short(CREATE2_DEPLOYER)}</span>), so these
+          Eight contracts go to fixed addresses through the standard CREATE2 deployer (<span className="mono">{short(CREATE2_DEPLOYER)}</span>), so these
           addresses are the same no matter who deploys. Each hook's address was mined so its last 14 bits match the
           permissions Uniswap v4 requires. Your wallet signs every transaction, and the site never sees a key.
         </p>
@@ -152,7 +152,7 @@ export function Deploy() {
           </div>
           <p className="note">
             Deploying all eight costs gas only (each is one transaction of about 1–4M gas). The wallet that deploys SessionHook becomes
-            its schedule admin (DST and holiday times, fees capped at 5%), and the wallet that deploys TideLauncher becomes the route admin
+            its schedule admin (DST and holiday times; it cannot change launchpad pool fees, which are a flat 2%), and the wallet that deploys TideLauncher becomes the route admin
             (which quote assets launches may migrate to). Neither can move anyone's funds. The exact init code is committed in the repo at{" "}
             <span className="mono">deployments/robinhood.json</span>, and the forge script deploys the same bytes.
           </p>
