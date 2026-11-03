@@ -1,5 +1,5 @@
 import { encodeAbiParameters, keccak256, toHex, type Hex } from "viem";
-import { ADDR } from "./chain";
+import { ADDR, POOL_MANAGER, client } from "./chain";
 import type { PoolKey } from "./data";
 
 /** PoolId = keccak256(abi.encode(PoolKey)), identical to v4's PoolIdLibrary. */
@@ -64,4 +64,13 @@ export function onCommitsChange(fn: () => void): () => void {
     window.removeEventListener(EVT, fn);
     window.removeEventListener("storage", fn);
   };
+}
+
+const EXTSLOAD = [{ type: "function", name: "extsload", stateMutability: "view", inputs: [{ type: "bytes32" }], outputs: [{ type: "bytes32" }] }] as const;
+
+/** Live sqrtPriceX96 of any v4 pool, read from PoolManager storage (pools mapping at slot 6, slot0 first). */
+export async function sqrtPriceOf(poolId: Hex): Promise<bigint> {
+  const slot = keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [poolId, 6n]));
+  const word = await client.readContract({ address: POOL_MANAGER, abi: EXTSLOAD, functionName: "extsload", args: [slot] });
+  return BigInt(word) & ((1n << 160n) - 1n);
 }

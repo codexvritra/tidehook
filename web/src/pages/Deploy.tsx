@@ -13,6 +13,7 @@ import { Spinner } from "../components/bits";
 import { EarningsPanel } from "../components/Earnings";
 import { usd, useEthUsd } from "../lib/ethPrice";
 import { ETH } from "../lib/chain";
+import { PAIR_ASSETS } from "../lib/stocks";
 import { parseEther } from "viem";
 
 type Item = { name: string; address: Address; salt: Hex; initCode: Hex };
@@ -157,6 +158,7 @@ export function Deploy() {
           </p>
         </div>
         {done && <PlatformPanel />}
+        {done && <StockPairsPanel />}
         {done && <AdminPanel />}
       </div>
     </section>
@@ -264,6 +266,82 @@ function PlatformPanel() {
         <EarningsPanel asset={{ address: ETH, symbol: "ETH", decimals: 18 }} mode="platform" />
       </div>
     </>
+  );
+}
+
+/** One click per pair: allow the stock/USDG as a migration target and register its real ETH route pool. */
+function StockPairsPanel() {
+  const { session, toast } = useApp();
+  const [admin] = usePoll(() => client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "admin" }), 120_000, []);
+  const [state, , reload] = usePoll(
+    () =>
+      Promise.all(
+        PAIR_ASSETS.map(async (a) => {
+          const [allowed, route] = await Promise.all([
+            client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "quoteAllowed", args: [a.address] }),
+            client.readContract({ address: ADDR.launcher, abi: tideLauncherAbi, functionName: "routeFor", args: [ETH, a.address] }),
+          ]);
+          return { allowed: allowed as boolean, routed: Number((route as { tickSpacing: number }).tickSpacing) !== 0 };
+        }),
+      ),
+    60_000,
+    [],
+  );
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!session || !admin || session.account.toLowerCase() !== admin.toLowerCase()) return null;
+
+  async function enable(list: typeof PAIR_ASSETS) {
+    if (!session) return;
+    try {
+      for (const a of list) {
+        const i = PAIR_ASSETS.indexOf(a);
+        setBusy(a.symbol);
+        if (!state?.[i]?.allowed) await sendTx(session, { address: ADDR.launcher, abi: tideLauncherAbi, functionName: "setQuoteAllowed", args: [a.address, true] });
+        if (!state?.[i]?.routed && a.route) await sendTx(session, { address: ADDR.launcher, abi: tideLauncherAbi, functionName: "setRoute", args: [a.route] });
+      }
+      toast("Stock pairs enabled.");
+    } catch (e) {
+      toast(errMsg(e), "err");
+    } finally {
+      setBusy(null);
+      reload();
+    }
+  }
+
+  const todo = PAIR_ASSETS.filter((a, i) => a.route && !(state?.[i]?.allowed && state?.[i]?.routed));
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <div className="panel-head">
+        <span className="tag">Stock pairs</span>
+        <span className="pill tide">{state ? `${PAIR_ASSETS.length - todo.length}/${PAIR_ASSETS.length} live` : "…"}</span>
+      </div>
+      <p className="note" style={{ marginTop: 0 }}>
+        Anyone can launch paired with these today. Enabling one also lets existing coins switch their pair from ETH to it, converting
+        through the deepest ETH pool on Uniswap v4 (found on-chain by <code>scripts/stocks.mjs</code>). Thin routes refuse large
+        conversions rather than lose value.
+      </p>
+      <table className="kv-table">
+        <tbody>
+          {PAIR_ASSETS.map((a, i) => (
+            <tr key={a.symbol}>
+              <td>
+                <b>{a.symbol}</b> <span className="dim">{a.name}</span>
+              </td>
+              <td className="mono dim">
+                <a href={explorer(a.address)} target="_blank" rel="noreferrer">
+                  {short(a.address)}
+                </a>
+              </td>
+              <td className="dim">{a.route ? `route ${(a.route.fee / 10_000).toFixed(2)}%` : "no route"}</td>
+              <td>{!state ? "…" : state[i].allowed && state[i].routed ? <span className="up">live</span> : busy === a.symbol ? <Spinner /> : <span className="dim">off</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="btn primary" style={{ marginTop: 12 }} disabled={!!busy || todo.length === 0} onClick={() => enable(todo)}>
+        {busy ? <Spinner /> : todo.length ? `Enable ${todo.length} pair${todo.length === 1 ? "" : "s"} (${todo.length * 2} txs)` : "All pairs enabled"}
+      </button>
+    </div>
   );
 }
 

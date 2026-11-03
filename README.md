@@ -201,3 +201,15 @@ Ignition (another Robinhood Chain launchpad) published its own incidents and fix
 | Owners could point a hook at their own trading code (until V17) | Migration only between the four fixed Tidehook hooks; no arbitrary code |
 | Shaped liquidity could block buys (V9); Stock Mode reverts trades | No hook ever blocks a swap; selling is always possible |
 | Fee could differ per launch / decay | Exactly 2% on every trade, constants in code, no LP fee on top |
+
+## Stock pairs
+
+Launches can be paired with ETH or with the same assets pons.family offers: USDG and the Robinhood stock tokens NVDA,
+SPY, TSLA, GME, PLTR, GLD, SPCX and MU (any other ERC20 also works via "Other token"). `web/scripts/stocks.mjs`
+regenerates `web/src/lib/stocks.ts` from mainnet: it checks each address's symbol, checks stocks were deployed by
+the Robinhood stock factory (`0x4783C67b63dE2B358Ac5951a7D41F47A38F3C046`) and picks the deepest hookless
+ETH/<asset> Uniswap v4 pool as that asset's migration route. The admin enables them all from the Deploy page
+(`setQuoteAllowed` + `setRoute`), after which an existing coin can switch its pair from ETH to any of them.
+
+`web/scripts/pairswitch-fork.mjs` proves it on a local mainnet fork: rename, 24h notice, ETH → NVDA migration
+through the real ETH/NVDA pool, then buys and sells in NVDA with the creator earning 1% in NVDA.

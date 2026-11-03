@@ -3,6 +3,8 @@ import { decodeEventLog, isAddress, type Address } from "viem";
 import { tideLauncherAbi } from "../lib/abis";
 import { go, useApp } from "../lib/appContext";
 import { ADDR, ETH } from "../lib/chain";
+import { PAIR_ASSETS } from "../lib/stocks";
+import { poolIdOf, sqrtPriceOf } from "../lib/pool";
 import { KINDS, KIND_BLURB, readAsset, type Asset } from "../lib/data";
 import { floorTickFor, fmtNum, mcapForStartTick, startTickForMcap } from "../lib/price";
 import { errMsg, sendTx } from "../lib/tx";
@@ -29,7 +31,8 @@ export function LaunchPage() {
   const [step, setStep] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState(0);
-  const [quoteMode, setQuoteMode] = useState<"eth" | "erc20">("eth");
+  // "eth", a PAIR_ASSETS symbol, or "erc20" for any other token address.
+  const [quoteMode, setQuoteMode] = useState<string>("eth");
   const [quoteAddr, setQuoteAddr] = useState("");
   const [asset, setAsset] = useState<Asset | null>({ address: ETH, symbol: "ETH", decimals: 18 });
   const [mcap, setMcap] = useState("3");
@@ -48,6 +51,8 @@ export function LaunchPage() {
 
   useEffect(() => {
     if (quoteMode === "eth") return setAsset({ address: ETH, symbol: "ETH", decimals: 18 });
+    const listed = PAIR_ASSETS.find((a) => a.symbol === quoteMode);
+    if (listed) return setAsset({ address: listed.address, symbol: listed.symbol, decimals: listed.decimals });
     setAsset(null);
     if (!isAddress(quoteAddr)) return;
     let live = true;
@@ -58,6 +63,22 @@ export function LaunchPage() {
       live = false;
     };
   }, [quoteMode, quoteAddr]);
+
+  /** Switch pair and keep the default start cap worth ~3 ETH, priced by the live ETH/asset route pool. */
+  async function pickPair(mode: string) {
+    setQuoteMode(mode);
+    const listed = PAIR_ASSETS.find((a) => a.symbol === mode);
+    if (mode === "eth") return setMcap("3");
+    setMcap(""); // a number in the old unit would silently mean something else in the new one
+    if (!listed?.route) return;
+    try {
+      const sqrt = await sqrtPriceOf(poolIdOf(listed.route));
+      const perEth = (Number(sqrt) / 2 ** 96) ** 2 * 10 ** (18 - listed.decimals); // asset per ETH
+      if (isFinite(perEth) && perEth > 0) setMcap(String(Number((3 * perEth).toPrecision(3))));
+    } catch {
+      /* leave it empty: the creator types a cap in the new unit */
+    }
+  }
 
   const mcapNum = Number(mcap);
   const plan = useMemo(() => {
@@ -184,14 +205,24 @@ export function LaunchPage() {
             <div className="row">
               <div className="field">
                 <label>Paired with</label>
-                <div className="seg">
-                  <button type="button" className={quoteMode === "eth" ? "on" : ""} onClick={() => setQuoteMode("eth")}>
+                <div className="seg pairs">
+                  <button type="button" className={quoteMode === "eth" ? "on" : ""} onClick={() => pickPair("eth")}>
                     ETH
                   </button>
-                  <button type="button" className={quoteMode === "erc20" ? "on" : ""} onClick={() => setQuoteMode("erc20")}>
-                    Any token (e.g. a stock token)
+                  {PAIR_ASSETS.map((a) => (
+                    <button key={a.symbol} type="button" className={quoteMode === a.symbol ? "on" : ""} onClick={() => pickPair(a.symbol)} title={a.name}>
+                      {a.symbol}
+                    </button>
+                  ))}
+                  <button type="button" className={quoteMode === "erc20" ? "on" : ""} onClick={() => pickPair("erc20")}>
+                    Other token
                   </button>
                 </div>
+                {PAIR_ASSETS.find((a) => a.symbol === quoteMode) && (
+                  <p className="note" style={{ margin: "6px 0 0" }}>
+                    {PAIR_ASSETS.find((a) => a.symbol === quoteMode)!.name} · buyers pay and creators earn in {quoteMode}.
+                  </p>
+                )}
               </div>
               {quoteMode === "erc20" && (
                 <div className="field">

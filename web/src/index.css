@@ -431,3 +431,9 @@ sub.zeros { font-size: 0.7em; vertical-align: -0.25em; margin: 0 1px; opacity: 0
 .trades tr.row-sell td:first-child { box-shadow: inset 2px 0 0 var(--down); }
 .pct-bar { display: inline-block; min-width: 90px; padding: 1px 6px; background: linear-gradient(90deg, var(--lime-dim) var(--w), transparent var(--w)); }
 @media (max-width: 700px) { .cchart-box { height: 300px; } .cchart-ohlc { display: none; } }
+
+/* pair picker + stock admin table */
+.seg.pairs { flex-wrap: wrap; }
+.kv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.kv-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.kv-table td:first-child { padding-left: 0; }
