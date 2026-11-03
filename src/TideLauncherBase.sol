@@ -141,6 +141,7 @@ abstract contract TideLauncherBase {
     error PriceDrift(int256 drift);
     error Slippage(uint256 out, uint256 minOut);
     error NotReady(uint256 readyAt);
+    error Vetoed();
 
     uint256 public constant SUPPLY = 1_000_000_000e18;
     int24 public constant TICK_SPACING = 200;
@@ -186,6 +187,8 @@ abstract contract TideLauncherBase {
     uint64 public pendingFeeRecipientReadyAt;
     /// @notice Creator role transfers are two-step: the new wallet must accept.
     mapping(uint256 => address) public pendingCreator;
+    /// @notice Increments with every migration proposal, so holder vetoes are counted per proposal.
+    mapping(uint256 => uint32) public migrationRound;
 
     constructor(IPoolManager _poolManager, address _patience, address _spring, address _bond, address _session) {
         poolManager = _poolManager;

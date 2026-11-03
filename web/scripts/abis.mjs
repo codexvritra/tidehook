@@ -9,7 +9,7 @@ const USED = {
     "routeFor", "quoteAllowed", "admin", "setQuoteAllowed", "setRoute",
     "RENAME_COOLDOWN", "MIGRATION_DELAY", "MIGRATION_WINDOW",
     "feeRecipient", "launchFee", "setLaunchFee", "proposeFeeRecipient", "applyFeeRecipient", "pendingFeeRecipient", "pendingFeeRecipientReadyAt",
-    "proposeAdmin", "acceptAdmin", "pendingAdmin", "transferCreator", "acceptCreator", "pendingCreator", "MIN_CREATOR_VEST",
+    "proposeAdmin", "acceptAdmin", "pendingAdmin", "transferCreator", "acceptCreator", "pendingCreator", "MIN_CREATOR_VEST", "veto", "tokenOf", "migrationRound",
     "Launched", "CreatorTransferred", "MetadataUpdated", "MigrationProposed", "MigrationCancelled", "Migrated", "QuoteAllowed", "RouteSet",
   ],
   TideRouter: ["swapExactIn", "quoteExactIn", "Trade"],
@@ -17,6 +17,7 @@ const USED = {
   SpringHook: ["quoteFee", "restLimit", "springs", "baseFee", "minFee", "maxFee", "band", "stiffness"],
   CreatorBondHook: ["getBond", "claim", "slash", "claimable", "slashable", "heldFor", "vested"],
   SessionHook: ["currentFee", "sessionAt", "fees", "schedule", "owner"],
+  TideVeto: ["lock", "unlock", "status", "lockOf", "circulating", "VETO_BPS", "Locked", "Unlocked"],
   TideToken: ["balanceOf", "allowance", "approve", "decimals", "symbol", "name", "totalSupply"],
 };
 

@@ -48,23 +48,23 @@ const warp = async (sec) => {
 
 await pub.request({ method: "anvil_setBalance", params: [account.address, "0x21E19E0C9BAB2400000"] }); // 10,000 ETH
 console.log("1. Deploy via CREATE2 deployer (same txs as the Deploy page)");
-let deployedHere = false; // false when the fork already contains the real mainnet deployment
+const deployedHere = new Set(); // contracts this run deployed (the rest already exist on mainnet)
 for (const p of plan) {
   ok(keccak256(p.initCode) && p.initCode.length > 2, `${p.name} init code present`);
   if ((await pub.getCode({ address: p.address })) === undefined) {
     await send({ to: CREATE2, data: concat([p.salt, p.initCode]) });
-    deployedHere = true;
+    deployedHere.add(p.name);
   }
   const code = await pub.getCode({ address: p.address });
   ok(code && code.length > 2, `${p.name} live at ${p.address}`);
 }
-if (deployedHere) {
+if (deployedHere.has("SessionHook")) {
   ok(
     (await pub.readContract({ address: A.SessionHook, abi: abi("SessionHook"), functionName: "owner" })).toLowerCase() ===
       account.address.toLowerCase(),
     "SessionHook owner = deploying wallet",
   );
-} else console.log("  · stack already deployed on this chain (mainnet deployment); skipping deployer-role checks");
+} else console.log("  · SessionHook already deployed on mainnet; skipping its deployer-role check");
 
 const L = { address: A.TideLauncher, abi: abi("TideLauncher") };
 const R = { address: A.TideRouter, abi: abi("TideRouter") };

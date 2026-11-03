@@ -439,3 +439,9 @@ sub.zeros { font-size: 0.7em; vertical-align: -0.25em; margin: 0 1px; opacity: 0
 .kv-table td:first-child { padding-left: 0; }
 
 .nav-x { width: 30px; height: 30px; }
+
+/* holder veto */
+.veto-bar { height: 10px; border: 1px solid var(--line-2); background: var(--bg-2); }
+.veto-bar i { display: block; height: 100%; background: var(--down); }
+.linkish { background: none; border: 0; padding: 0; color: var(--lime); font: inherit; cursor: pointer; }
+.pill.down { color: var(--down); border-color: var(--down); }

@@ -49,6 +49,11 @@ ok(eq(await read("TideLauncher", A.TideLauncher, "migrator"), A.TideMigrator), "
   ok((await read("TideLauncher", A.TideLauncher, "launchIdPlusOne", [tok])) === 0n, "a stranger's factory token is not listed as a launch");
 }
 ok(eq(await read("TideRouter", A.TideRouter, "poolManager"), PM), "TideRouter → PoolManager");
+{
+  const veto = await read("TideLauncher", A.TideLauncher, "veto");
+  ok(eq(await read("TideVeto", veto, "launcher"), A.TideLauncher) && eq(await read("TideVeto", veto, "poolManager"), PM), `holder veto ${veto} → launcher + PoolManager`);
+  ok(Number(await read("TideVeto", veto, "VETO_BPS")) === 1000, "veto threshold 10% of circulating supply");
+}
 
 console.log("3. Roles and settings");
 const admin = await read("TideLauncher", A.TideLauncher, "admin");

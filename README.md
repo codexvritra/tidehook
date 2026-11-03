@@ -213,3 +213,10 @@ ETH/<asset> Uniswap v4 pool as that asset's migration route. The admin enables t
 
 `web/scripts/pairswitch-fork.mjs` proves it on a local mainnet fork: rename, 24h notice, ETH → NVDA migration
 through the real ETH/NVDA pool, then buys and sells in NVDA with the creator earning 1% in NVDA.
+
+## Holder veto (launcher v2)
+
+A creator's hook or pair switch is announced 24h ahead. During that notice any holder can lock the coin's tokens in
+`TideVeto` against it; once locked tokens reach 10% of the circulating supply (everything outside the pool, the burn
+address and the creator bond) `executeMigration` reverts with `Vetoed`. Tokens unlock at any time, and every new
+proposal starts a fresh count. `web/scripts/veto-fork.mjs` runs it end to end on a mainnet fork.

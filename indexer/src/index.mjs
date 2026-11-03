@@ -7,10 +7,10 @@ import pg from "pg";
 import { createPublicClient, erc20Abi, http as rpcHttp, parseAbiItem } from "viem";
 
 const RPC = process.env.RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
-const LAUNCHER = (process.env.LAUNCHER || "0xe093BE5a29F3e57B9b24d3f0c8F96Bf1c095c2F2").toLowerCase();
+const LAUNCHER = (process.env.LAUNCHER || "0xa566B45e69973578E043cB26c34EC1399e49205D").toLowerCase();
 const ROUTER = (process.env.ROUTER || "0x026b7469bE095D42D732A390E93c168992F8bd73").toLowerCase();
 const POOL_MANAGER = "0x8366a39cc670b4001a1121b8f6a443a643e40951";
-const START_BLOCK = BigInt(process.env.START_BLOCK || "104874238"); // TideLauncher deployment
+const START_BLOCK = BigInt(process.env.START_BLOCK || "104967797"); // TideLauncher v2 deployment
 const CHUNK = BigInt(process.env.CHUNK || "5000");
 const PORT = Number(process.env.PORT || 8080);
 const ETH = "0x0000000000000000000000000000000000000000";
@@ -314,5 +314,11 @@ http
   .listen(PORT, () => log(`api on :${PORT}`));
 
 await migrate();
+// A new launcher deployment has its own launch ids: start the index over instead of mixing them.
+if ((await getMeta("launcher")) !== LAUNCHER) {
+  await db.query("truncate launches, pools, trades, transfers, meta");
+  await db.query("insert into meta (k, v) values ('launcher', $1)", [LAUNCHER]);
+  log(`fresh index for launcher ${LAUNCHER}`);
+}
 log(`indexing ${LAUNCHER} from block ${START_BLOCK} via ${RPC}`);
 follow();

@@ -23,6 +23,7 @@ import {TideToken, TideTokenFactory} from "./TideToken.sol";
 import {TideLauncherBase} from "./TideLauncherBase.sol";
 import {TideMigrator} from "./TideMigrator.sol";
 import {CreatorBondHook} from "./CreatorBondHook.sol";
+import {TideVeto} from "./TideVeto.sol";
 
 /// @title TideLauncher
 /// @notice One transaction launches a token on Uniswap v4 behind a tidehook:
@@ -41,6 +42,7 @@ import {CreatorBondHook} from "./CreatorBondHook.sol";
 ///           Migration is announced on-chain and executable only after MIGRATION_DELAY, keeps the price,
 ///           and may only switch to admin-allowlisted quote assets through admin-registered route pools.
 ///           Bond launches can't migrate: their escrow is tied to the original pool's price.
+///           Holders can veto a pending migration by locking >= 10% of the circulating supply in TideVeto.
 contract TideLauncher is TideLauncherBase, IUnlockCallback {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
@@ -48,6 +50,8 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
 
     TideTokenFactory public immutable tokenFactory;
     TideMigrator public immutable migrator;
+    /// @notice Holders lock tokens here to block a pending migration (see TideVeto).
+    TideVeto public immutable veto;
 
     constructor(
         IPoolManager _poolManager,
@@ -60,6 +64,7 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
     ) TideLauncherBase(_poolManager, _patience, _spring, _bond, _session) {
         tokenFactory = _factory;
         migrator = _migrator;
+        veto = new TideVeto(address(this), address(_poolManager));
         // The deploying EOA administers routes; keeps the CREATE2 init code independent of who deploys.
         admin = tx.origin;
         feeRecipient = tx.origin;
@@ -164,6 +169,7 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
             routeId = _routes[_pairKey(oldQuote, quote)].toId();
         }
         uint64 readyAt = uint64(block.timestamp + MIGRATION_DELAY);
+        ++migrationRound[id]; // fresh veto tally for every proposal
         pendingMigration[id] =
             Migration({kind: kind, quote: quote, readyAt: readyAt, routeTick: routeTick, routeId: routeId});
         emit MigrationProposed(id, kind, quote, readyAt);
@@ -183,6 +189,7 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
         if (m.readyAt == 0) revert NoMigration();
         if (block.timestamp < m.readyAt) revert MigrationNotReady(m.readyAt);
         if (block.timestamp > m.readyAt + MIGRATION_WINDOW) revert MigrationExpired();
+        if (veto.isVetoed(id)) revert Vetoed();
         delete pendingMigration[id];
         poolManager.unlock(abi.encode(Action.Migrate, abi.encode(id, m, minQuoteOut)));
     }
@@ -334,6 +341,10 @@ contract TideLauncher is TideLauncherBase, IUnlockCallback {
             page[i] = l;
             (sqrtPrices[i], ticks[i],,) = poolManager.getSlot0(l.key.toId());
         }
+    }
+
+    function tokenOf(uint256 id) external view returns (address) {
+        return _get(id).token;
     }
 
     function poolIdOf(uint256 id) external view returns (PoolId) {
